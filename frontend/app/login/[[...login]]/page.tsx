@@ -1,37 +1,31 @@
 "use client";
 
-import { CustomSignIn } from "@/components/custom-signin";
+import Image from "next/image";
 import { motion } from "motion/react";
-import { GraduationCap, Camera, Shield, Zap } from "lucide-react";
+import { Camera, Zap } from "lucide-react";
+import { CustomSignIn } from "./custom-signin";
+import { ThemeToggler } from "@/components/toggler";
 
 export default function Page() {
-
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-blue-500/5 to-purple-500/5" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-400/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-purple-400/10 rounded-full blur-3xl animate-pulse delay-500" />
-      </div>
+    <div className="min-h-screen relative">
+      <ThemeToggler className="fixed top-2 right-2" />
 
-      <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 gap-8 items-center px-4 py-8">
-        {/* Left Side - Features */}
+      <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 gap-1 items-center px-2 py-8">
         <motion.div
           initial={{ opacity: 0, x: -50 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="relative hidden lg:block"
+          className="relative hidden lg:block lg:ml-12"
         >
-          <div className="relative rounded-3xl border border-border/20 bg-card/30 backdrop-blur-xl p-8 h-[600px] flex flex-col justify-between overflow-hidden shadow-2xl">
-            <div className="space-y-6">
+          <div className="relative rounded-3xl border border-border/70 bg-card/45 backdrop-blur-xl p-8 h-[480px] flex flex-col justify-between overflow-hidden shadow-[0_6px_32px_4px_rgba(0,0,0,0.07)]">
+            <div className="space-y-2">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
               >
-                <h2 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-cyan-400 to-foreground bg-clip-text text-transparent">
+                <h2 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-primary/80 to-foreground bg-clip-text text-transparent">
                   Smart Attendance
                 </h2>
                 <p className="text-muted-foreground mt-2 text-lg">
@@ -42,7 +36,6 @@ export default function Page() {
               <div className="space-y-4">
                 {[
                   { icon: Camera, title: "Real-time Recognition", desc: "Instant face detection and verification" },
-                  { icon: Shield, title: "Secure & Private", desc: "Advanced encryption and data protection" },
                   { icon: Zap, title: "Lightning Fast", desc: "Sub-second response times" }
                 ].map((feature, index) => (
                   <motion.div
@@ -50,9 +43,9 @@ export default function Page() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 + index * 0.1, duration: 0.5 }}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-background/20 backdrop-blur-sm border border-border/20"
+                    className="flex items-center gap-4 p-4 rounded-xl bg-background/20 backdrop-blur-sm border border-border/80"
                   >
-                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center">
+                    <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary-foreground rounded-xl flex items-center justify-center">
                       <feature.icon className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -68,12 +61,9 @@ export default function Page() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.8, duration: 0.6 }}
-              className="relative mx-auto"
+              className="relative mx-auto mt-4"
             >
-              <div className="w-32 h-32 bg-gradient-to-br from-cyan-400/20 to-blue-500/20 rounded-3xl flex items-center justify-center backdrop-blur-sm border border-cyan-400/30">
-                <GraduationCap className="w-16 h-16 text-cyan-400" />
-              </div>
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-cyan-400/10 to-blue-500/10 animate-pulse" />
+              <Image src="/Clang01.png" alt="Logo" width={100} height={100} />
             </motion.div>
 
             <motion.div

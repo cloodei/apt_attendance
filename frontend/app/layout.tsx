@@ -3,7 +3,6 @@ import { type Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { Providers } from "../components/providers";
-import Layout from "../components/root-layout";
 
 const fontSans = Geist({
   variable: "--font-geist-sans",
@@ -31,9 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en" suppressHydrationWarning>
         <body className={`min-h-screen bg-background antialiased ${fontSans.variable} ${fontMono.variable} ${fontHeading.variable}`}>
           <Providers>
-            <Layout>
-              {children}
-            </Layout>
+            {children}
           </Providers>
         </body>
       </html>

@@ -1,15 +1,24 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import { TeacherDashboard } from "@/components/teacher-dashboard";
-import { StudentDashboard } from "@/components/student-dashboard";
-import { RoleManager } from "@/components/role-manager";
 import { motion } from "motion/react";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { RoleManager } from "@/components/role-manager";
+import { TeacherDashboard } from "@/components/teacher-dashboard";
+import { StudentDashboard } from "@/components/student-dashboard";
+import Layout from "@/components/root-layout";
 
-export default function DashboardPage() {
+export default function Wrapped() {
+  return (
+    <Layout>
+      <DashboardPage />
+    </Layout>
+  );
+}
+
+function DashboardPage() {
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
   const [userRole, setUserRole] = useState<'teacher' | 'student' | null>(null);

@@ -131,116 +131,14 @@ export function TeacherDashboard({ user }: TeacherDashboardProps) {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-cyan-400 to-foreground bg-clip-text text-transparent">
-            Teacher Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-2 text-lg">
-            Welcome back, {user.firstName || user.emailAddresses[0]?.emailAddress}
-          </p>
-        </div>
-        <div className="flex gap-3">
-          {!isTakingAttendance ? (
-            <Button
-              onClick={startAttendance}
-              className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Camera className="w-5 h-5 mr-2" />
-              Start Attendance
-            </Button>
-          ) : (
-            <Button
-              onClick={stopAttendance}
-              variant="destructive"
-              className="px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Square className="w-5 h-5 mr-2" />
-              Stop Session
-            </Button>
-          )}
-          <Button
-            onClick={handleSignOut}
-            variant="outline"
-            className="px-6 py-3 rounded-xl font-medium border-red-500/30 hover:border-red-500/50 hover:bg-red-500/5 text-red-600 hover:text-red-700 transition-all duration-300"
-          >
-            <LogOut className="w-5 h-5 mr-2" />
-            Sign Out
-          </Button>
-        </div>
-      </motion.div>
-
-      {/* Stats Cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.6 }}
-        className="grid grid-cols-1 md:grid-cols-4 gap-6"
-      >
-        <Card className="border-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-600">Present</p>
-                <p className="text-3xl font-bold text-green-600">{presentCount}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 bg-gradient-to-br from-red-500/10 to-rose-500/10 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-600">Absent</p>
-                <p className="text-3xl font-bold text-red-600">{absentCount}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 bg-gradient-to-br from-yellow-500/10 to-amber-500/10 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-yellow-600">Pending</p>
-                <p className="text-3xl font-bold text-yellow-600">{pendingCount}</p>
-              </div>
-              <AlertCircle className="w-8 h-8 text-yellow-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600">Total</p>
-                <p className="text-3xl font-bold text-blue-600">{students.length}</p>
-              </div>
-              <Users className="w-8 h-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Main Content */}
+    <div className="space-y-8 mt-10">
       <Tabs defaultValue="live" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 bg-card/50 backdrop-blur-sm">
-          <TabsTrigger value="live" className="flex items-center gap-2">
+        <TabsList className="grid w-full grid-cols-2 bg-card/50 backdrop-blur-sm text-neutral-800/30" style={{ outline: "1px solid #262626" }}>
+          <TabsTrigger value="live" className="flex items-center gap-2 cursor-pointer">
             <Camera className="w-4 h-4" />
             Live Attendance
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2">
+          <TabsTrigger value="history" className="flex items-center gap-2 cursor-pointer">
             <BarChart3 className="w-4 h-4" />
             Attendance History
           </TabsTrigger>

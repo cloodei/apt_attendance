@@ -1,36 +1,60 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+"use client";
+
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { TeacherDashboard } from "@/components/teacher-dashboard";
+import { StudentDashboard } from "@/components/student-dashboard";
+import { RoleManager } from "@/components/role-manager";
+import { motion } from "motion/react";
+import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
-  return (
-    <div className="space-y-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage attendance and view live sessions</p>
-        </div>
-        <Link href="/attendance">
-          <Button>Start Attendance</Button>
-        </Link>
-      </header>
+  const { isLoaded, isSignedIn, user } = useUser();
+  const router = useRouter();
+  const [userRole, setUserRole] = useState<'teacher' | 'student' | null>(null);
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur p-6">
-          <h2 className="text-lg font-medium">Quick Start</h2>
-          <p className="text-sm text-muted-foreground mt-1">Begin a new session using the camera to recognize faces in real-time.</p>
-          <div className="mt-4">
-            <Link href="/attendance">
-              <Button variant="secondary">Open Camera</Button>
-            </Link>
-          </div>
-        </div>
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.push('/login');
+    }
+  }, [isLoaded, isSignedIn, router]);
 
-        <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur p-6">
-          <h2 className="text-lg font-medium">Recent Sessions</h2>
-          <p className="text-sm text-muted-foreground mt-1">Your latest attendance sessions will appear here.</p>
-          <div className="mt-4 text-sm text-muted-foreground">No sessions yet.</div>
-        </div>
-      </section>
-    </div>
-  );
+  const handleRoleSelected = (role: 'teacher' | 'student') => {
+    setUserRole(role);
+  };
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="text-center space-y-4"
+        >
+          <Loader2 className="w-12 h-12 animate-spin text-cyan-400 mx-auto" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn || !user) {
+    return null;
+  }
+
+  // Show role manager if user doesn't have a role set
+  if (!user.unsafeMetadata?.role && !userRole) {
+    return <RoleManager onRoleSelected={handleRoleSelected} />;
+  }
+
+  // Get user role from Clerk metadata or state
+  const currentRole = userRole || (user.unsafeMetadata?.role as 'teacher' | 'student') || 'student';
+
+  if (currentRole === 'teacher') {
+    return <TeacherDashboard user={user} />;
+  }
+
+  return <StudentDashboard user={user} />;
 }

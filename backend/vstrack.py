@@ -3,10 +3,37 @@ import logging
 import time
 import cv2
 import numpy as np
+from PIL import Image
 from aiortc import VideoStreamTrack
 from av import VideoFrame
+import cv2
+import numpy as np
+from facenet_pytorch import MTCNN
 
 IP_WEBCAM_URL = "http://10.2.88.228:8080/video"
+
+mtcnn = MTCNN(keep_all=True)
+
+def detect_faces(frame):
+    """
+    Detects faces in a given frame, draws bounding boxes, and returns the frame.
+    This is a blocking, CPU-bound function.
+    """
+    # Resize for faster processing and convert to PIL Image
+    frame_resized = cv2.resize(frame, None, fx=0.5, fy=0.5)
+    img = Image.fromarray(cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB))
+
+    # Detect faces
+    boxes, probs = mtcnn.detect(img)
+    
+    # Draw bounding boxes on the resized frame
+    if boxes is not None:
+        for box, prob in zip(boxes, probs):
+            if prob > 0.8: # Increased threshold for better accuracy
+                x1, y1, x2, y2 = [int(b) for b in box]
+                cv2.rectangle(frame_resized, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+    return frame_resized
 
 class IPWebcamTrack(VideoStreamTrack):
     """
@@ -22,8 +49,8 @@ class IPWebcamTrack(VideoStreamTrack):
 
     def connect(self):
         print("Attempting to connect to IP Webcam stream...")
-        self.cap = cv2.VideoCapture(IP_WEBCAM_URL, cv2.CAP_FFMPEG) 
-        
+        self.cap = cv2.VideoCapture(IP_WEBCAM_URL, cv2.CAP_FFMPEG)
+
         if not self.cap.isOpened():
             logging.error(f"Could not open video stream from IP Webcam: {IP_WEBCAM_URL}")
             self.cap = None
@@ -55,12 +82,18 @@ class IPWebcamTrack(VideoStreamTrack):
             video_frame.time_base = time_base
             return video_frame
 
-        video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
-        # Resample the frame to a format that is more compatible with WebRTC
-        # video_frame = video_frame.reformat(format="yuv420p")
+        # Run face detection in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        processed_frame = await loop.run_in_executor(None, detect_faces, frame)
+
+        # Create a VideoFrame from the processed frame
+        video_frame = VideoFrame.from_ndarray(processed_frame, format="bgr24")
+        
+        # Reformat to yuv420p for better browser compatibility
+        video_frame = video_frame.reformat(format="yuv420p")
         video_frame.pts = pts
         video_frame.time_base = time_base
-        
+
         return video_frame
 
     def __del__(self):

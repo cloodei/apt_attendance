@@ -1,0 +1,12 @@
+[project]
+name = "model"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "facenet-pytorch>=2.6.0",
+    "numpy>=1.26.4",
+    "opencv-python>=4.11.0.86",
+    "requests>=2.32.5",
+]

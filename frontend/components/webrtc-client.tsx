@@ -3,7 +3,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, CameraOff, CheckCircle, Users, Zap, Wifi, WifiOff } from "lucide-react";
-import { useUser } from "@clerk/nextjs";
 
 export type WebRTCClientProps = {
   className?: string;
@@ -25,182 +24,93 @@ export function WebRTCClient({
   isRecognizing = false, 
   facesDetected = 0, 
   confidence = 0,
-  serverUrl = "ws://10.2.89.39:8080"
+  // serverUrl = "ws://10.2.89.39:8080"
 }: WebRTCClientProps) {
-  const { user } = useUser();
+  const pcRef = React.useRef<RTCPeerConnection | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+
   const [error, setError] = React.useState<string | null>(null);
   const [active, setActive] = React.useState(false);
   const [isInitializing, setIsInitializing] = React.useState(false);
   const [connectionStatus, setConnectionStatus] = React.useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  const clientIdRef = React.useRef<string>(`client_${user?.username}`);
-  
-  const peerConnectionRef = React.useRef<RTCPeerConnection | null>(null);
-  const websocketRef = React.useRef<WebSocket | null>(null);
 
-  const startConnection = React.useCallback(async () => {
-    try {
-      setError(null);
-      setIsInitializing(true);
-      setConnectionStatus('connecting');
+  async function startConnection() {
+    setIsInitializing(true);
+    setConnectionStatus('connecting');
 
-      // Create WebSocket connection
-      const ws = new WebSocket(`${serverUrl}/ws/${clientIdRef.current}`);
-      websocketRef.current = ws;
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+    pcRef.current = pc;
 
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        setConnectionStatus('connected');
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setConnectionStatus('disconnected');
-        setActive(false);
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setError('WebSocket connection failed');
-        setConnectionStatus('disconnected');
-        setIsInitializing(false);
-      };
-
-      ws.onmessage = async (event) => {
-        const message = JSON.parse(event.data);
-        
-        if (message.type === 'answer') {
-          const answer = new RTCSessionDescription({
-            type: 'answer',
-            sdp: message.sdp
-          });
-          
-          if (peerConnectionRef.current) {
-            await peerConnectionRef.current.setRemoteDescription(answer);
-          }
-        } else if (message.type === 'ice-candidate' && message.candidate) {
-          try {
-            const candidate = new RTCIceCandidate(message.candidate);
-            if (peerConnectionRef.current) {
-              await peerConnectionRef.current.addIceCandidate(candidate);
-            }
-          } catch (err) {
-            console.error('Error adding remote ICE candidate', err);
-          }
-        } else if (message.type === 'error') {
-          setError(message.message ?? 'Unknown server error');
-        }
-      };
-
-      // Create RTCPeerConnection
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      });
-      peerConnectionRef.current = pc;
-      pc.addTransceiver('video', { direction: 'recvonly' });
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && ws.readyState === WebSocket.OPEN) {
-          // Only forward UDP candidates to the server – aiortc currently handles UDP only
-          if (event.candidate.candidate && event.candidate.candidate.includes(' udp ')) {
-            ws.send(JSON.stringify({
-              type: 'ice-candidate',
-              candidate: event.candidate
-            }));
-          }
-        }
-      };
-
-      pc.ontrack = (event) => {
-        if (videoRef.current && event.streams[0]) {
-          console.log('Received remote track');
-          videoRef.current.srcObject = event.streams[0];
-          videoRef.current.play().then(() => {
-            setActive(true);
-            setIsInitializing(false);
-          }).catch((err) => {
-            console.error('Error playing video:', err);
-            setError('Failed to play video stream');
-            setIsInitializing(false);
-          });
-        }
-      };
-
-      // Handle connection state changes
-      pc.onconnectionstatechange = () => {
-        console.log('Connection state:', pc.connectionState);
-        if (pc.connectionState === 'connected') {
-          setConnectionStatus('connected');
-        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-          setConnectionStatus('disconnected');
-          setActive(false);
-        }
-      };
-
-      // Wait for WebSocket to be ready
-      await new Promise((resolve) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          resolve(true);
-        }
-        else {
-          ws.onopen = () => resolve(true);
-        }
-      });
-
-      // Create offer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      // Send offer to server
-      ws.send(JSON.stringify({
-        type: 'offer',
-        sdp: offer.sdp
-      }));
-
-    } catch (err: any) {
-      console.error('Connection error:', err);
-      setError(err?.message ?? 'Failed to connect to server');
-      setConnectionStatus('disconnected');
-      setIsInitializing(false);
-    }
-  }, [serverUrl]);
-
-  const stopConnection = React.useCallback(() => {
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    
-    if (websocketRef.current) {
-      websocketRef.current.close();
-      websocketRef.current = null;
-    }
-    
-    setActive(false);
-    setConnectionStatus('disconnected');
-    setIsInitializing(false);
-  }, []);
-
-  React.useEffect(() => {
-    return () => {
-      stopConnection();
+    pc.ontrack = (event) => {
+      if (videoRef.current && event.streams && event.streams[0]) {
+        console.log('Track received, setting srcObject.');
+        videoRef.current.srcObject = event.streams[0];
+      }
     };
-  }, [stopConnection]);
+
+    const offer = await pc.createOffer({
+      offerToReceiveVideo: true,
+      offerToReceiveAudio: false,
+    });
+    await pc.setLocalDescription(offer);
+
+    try {
+      const response = await fetch('http://10.2.89.39:8080/offer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sdp: offer.sdp,
+          type: offer.type,
+        }),
+      });
+
+      if (!response.ok)
+        throw new Error('Failed to get answer from server.');
+
+      const answer = await response.json();
+
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      setActive(true);
+      setIsInitializing(false);
+      setConnectionStatus('connected');
+      console.log('Streaming started successfully!');
+    }
+    catch (error: any) {
+      console.error('Error starting stream:', error);
+      alert('Could not start stream. Check console for details.');
+      setError(error?.message || error || 'An error occurred while starting the stream.');
+      stopConnection();
+    }
+  };
+
+  const stopConnection = () => {
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+
+    if (videoRef.current)
+      videoRef.current.srcObject = null;
+
+    setActive(false);
+    setIsInitializing(false);
+    setConnectionStatus('disconnected');
+    console.log('Stream stopped.');
+  };
 
   return (
     <div className={"relative w-full aspect-video rounded-2xl overflow-hidden border border-border/20 bg-gradient-to-br from-black/60 to-black/40 backdrop-blur-sm shadow-2xl " + (className ?? "")}>
-      <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted />
+      <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
 
-      {/* Animated overlay */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-blue-500/5" />
       </div>
 
-      {/* Recognition overlay */}
       <AnimatePresence>
         {isRecognizing && (
           <motion.div
@@ -212,7 +122,6 @@ export function WebRTCClient({
         )}
       </AnimatePresence>
 
-      {/* HUD elements */}
       <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -277,7 +186,6 @@ export function WebRTCClient({
         )}
       </div>
 
-      {/* Face detection frame */}
       <div className="absolute inset-8 border-2 border-white/30 rounded-2xl">
         <div className="absolute inset-0 border border-cyan-400/50 rounded-2xl" />
         <motion.div
@@ -287,13 +195,11 @@ export function WebRTCClient({
         />
       </div>
 
-      {/* Corner indicators */}
       <div className="absolute top-6 left-6 w-6 h-6 border-t-2 border-l-2 border-cyan-400/60 rounded-tl-lg" />
       <div className="absolute top-6 right-6 w-6 h-6 border-t-2 border-r-2 border-cyan-400/60 rounded-tr-lg" />
       <div className="absolute bottom-6 left-6 w-6 h-6 border-b-2 border-l-2 border-cyan-400/60 rounded-bl-lg" />
       <div className="absolute bottom-6 right-6 w-6 h-6 border-b-2 border-r-2 border-cyan-400/60 rounded-br-lg" />
 
-      {/* Control buttons */}
       <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center gap-4">
         {!active && connectionStatus === 'disconnected' && (
           <motion.button
@@ -308,7 +214,7 @@ export function WebRTCClient({
             <div className="flex items-center gap-2">
               <Camera className="w-4 h-4 text-emerald-400" />
               <span className="text-sm text-emerald-300 font-medium">
-                {isInitializing ? 'Connecting...' : 'Connect to Server'}
+                {isInitializing ? 'Initializing...' : 'Connect to Server'}
               </span>
             </div>
           </motion.button>
@@ -359,7 +265,6 @@ export function WebRTCClient({
         )}
       </div>
 
-      {/* Error state */}
       <AnimatePresence>
         {error && (
           <motion.div

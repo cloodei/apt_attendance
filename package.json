@@ -1,6 +1,5 @@
 {
   "name": "apt_attendance",
-  "description": "apt ech",
   "scripts": {
     "start": "concurrently \"bun run frontend\" \"bun run backend\"",
     "start:webrtc": "concurrently \"bun run frontend\" \"bun run backend:webrtc\"",

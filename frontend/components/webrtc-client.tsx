@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Camera, CameraOff, AlertCircle, CheckCircle, Users, Zap, Wifi, WifiOff } from "lucide-react";
+import { Camera, CameraOff, CheckCircle, Users, Zap, Wifi, WifiOff } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 
 export type WebRTCClientProps = {
   className?: string;
@@ -24,17 +25,18 @@ export function WebRTCClient({
   isRecognizing = false, 
   facesDetected = 0, 
   confidence = 0,
-  serverUrl = "ws://localhost:8000"
+  serverUrl = "ws://10.2.89.39:8080"
 }: WebRTCClientProps) {
+  const { user } = useUser();
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [active, setActive] = React.useState(false);
   const [isInitializing, setIsInitializing] = React.useState(false);
   const [connectionStatus, setConnectionStatus] = React.useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const clientIdRef = React.useRef<string>(`client_${user?.username}`);
   
   const peerConnectionRef = React.useRef<RTCPeerConnection | null>(null);
   const websocketRef = React.useRef<WebSocket | null>(null);
-  const clientIdRef = React.useRef<string>(`client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
   const startConnection = React.useCallback(async () => {
     try {
@@ -76,6 +78,17 @@ export function WebRTCClient({
           if (peerConnectionRef.current) {
             await peerConnectionRef.current.setRemoteDescription(answer);
           }
+        } else if (message.type === 'ice-candidate' && message.candidate) {
+          try {
+            const candidate = new RTCIceCandidate(message.candidate);
+            if (peerConnectionRef.current) {
+              await peerConnectionRef.current.addIceCandidate(candidate);
+            }
+          } catch (err) {
+            console.error('Error adding remote ICE candidate', err);
+          }
+        } else if (message.type === 'error') {
+          setError(message.message ?? 'Unknown server error');
         }
       };
 
@@ -87,21 +100,23 @@ export function WebRTCClient({
         ]
       });
       peerConnectionRef.current = pc;
+      pc.addTransceiver('video', { direction: 'recvonly' });
 
-      // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'ice-candidate',
-            candidate: event.candidate
-          }));
+          // Only forward UDP candidates to the server – aiortc currently handles UDP only
+          if (event.candidate.candidate && event.candidate.candidate.includes(' udp ')) {
+            ws.send(JSON.stringify({
+              type: 'ice-candidate',
+              candidate: event.candidate
+            }));
+          }
         }
       };
 
-      // Handle incoming video stream
       pc.ontrack = (event) => {
-        console.log('Received remote track');
         if (videoRef.current && event.streams[0]) {
+          console.log('Received remote track');
           videoRef.current.srcObject = event.streams[0];
           videoRef.current.play().then(() => {
             setActive(true);
@@ -129,7 +144,8 @@ export function WebRTCClient({
       await new Promise((resolve) => {
         if (ws.readyState === WebSocket.OPEN) {
           resolve(true);
-        } else {
+        }
+        else {
           ws.onopen = () => resolve(true);
         }
       });

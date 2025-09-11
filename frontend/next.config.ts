@@ -1,10 +1,16 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+export default {
   // experimental: {
-    
-  // }
-};
-
-export default nextConfig;
+  //   reactCompiler: true
+  // },
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/dashboard",
+        permanent: true
+      }
+    ]
+  },
+} satisfies NextConfig;

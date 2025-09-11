@@ -1,22 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "motion/react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
+import { Camera, Users, CheckCircle, XCircle, AlertCircle, BarChart3, UserCheck, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Camera, 
-  Users, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle,
-  BarChart3,
-  UserCheck,
-  Play,
-} from "lucide-react";
-import { FaceCamera } from "./face-camera";
+import { Button } from "@/components/ui/button";
+import { WebRTCClient } from "./webrtc-client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Student {
   id: string;
@@ -36,17 +27,39 @@ interface AttendanceSession {
   duration: number;
 } 
 
+const getStatusIcon = (status: Student['status']) => {
+  switch (status) {
+    case 'present':
+      return <CheckCircle className="w-5 h-5 text-green-500" />;
+    case 'absent':
+      return <XCircle className="w-5 h-5 text-red-500" />;
+    case 'pending':
+      return <AlertCircle className="w-5 h-5 text-yellow-500" />;
+  }
+};
+
+const getStatusColor = (status: Student['status']) => {
+  switch (status) {
+    case 'present':
+      return 'bg-green-500/10 text-green-600 border-green-500/20';
+    case 'absent':
+      return 'bg-red-500/10 text-red-600 border-red-500/20';
+    case 'pending':
+      return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
+  }
+};
+
 export function TeacherDashboard() {
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
-  const [, setCurrentSession] = useState<string | null>(null);
-  const [students, setStudents] = useState<Student[]>([
-    { id: '1', name: 'Alice Johnson', email: 'alice@example.com', status: 'present', lastSeen: new Date(), confidence: 0.95 },
-    { id: '2', name: 'Bob Smith', email: 'bob@example.com', status: 'present', lastSeen: new Date(), confidence: 0.87 },
-    { id: '3', name: 'Carol Davis', email: 'carol@example.com', status: 'absent' },
-    { id: '4', name: 'David Wilson', email: 'david@example.com', status: 'pending' },
-    { id: '5', name: 'Eva Brown', email: 'eva@example.com', status: 'present', lastSeen: new Date(), confidence: 0.92 },
-    { id: '6', name: 'Frank Miller', email: 'frank@example.com', status: 'absent' },
-  ]);
+  // const [, setCurrentSession] = useState<string | null>(null);
+  // const [students, setStudents] = useState<Student[]>([
+  //   { id: '1', name: 'Alice Johnson', email: 'alice@example.com', status: 'present', lastSeen: new Date(), confidence: 0.95 },
+  //   { id: '2', name: 'Bob Smith', email: 'bob@example.com', status: 'present', lastSeen: new Date(), confidence: 0.87 },
+  //   { id: '3', name: 'Carol Davis', email: 'carol@example.com', status: 'absent' },
+  //   { id: '4', name: 'David Wilson', email: 'david@example.com', status: 'pending' },
+  //   { id: '5', name: 'Eva Brown', email: 'eva@example.com', status: 'present', lastSeen: new Date(), confidence: 0.92 },
+  //   { id: '6', name: 'Frank Miller', email: 'frank@example.com', status: 'absent' },
+  // ]);
 
   const [attendanceHistory] = useState<AttendanceSession[]>([
     {
@@ -77,29 +90,7 @@ export function TeacherDashboard() {
 
   const startAttendance = () => {
     setIsTakingAttendance(true);
-    setCurrentSession(Date.now().toString());
-  };
-
-  const getStatusIcon = (status: Student['status']) => {
-    switch (status) {
-      case 'present':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'absent':
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      case 'pending':
-        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-    }
-  };
-
-  const getStatusColor = (status: Student['status']) => {
-    switch (status) {
-      case 'present':
-        return 'bg-green-500/10 text-green-600 border-green-500/20';
-      case 'absent':
-        return 'bg-red-500/10 text-red-600 border-red-500/20';
-      case 'pending':
-        return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
-    }
+    // setCurrentSession(Date.now().toString());
   };
 
   return (
@@ -124,7 +115,6 @@ export function TeacherDashboard() {
               transition={{ duration: 0.5 }}
               className="space-y-6"
             >
-              {/* Camera Section */}
               <Card className="border-0 bg-card/50 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -136,51 +126,7 @@ export function TeacherDashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <FaceCamera label="Scanning for faces..." />
-                </CardContent>
-              </Card>
-
-              {/* Student Status Grid */}
-              <Card className="border-0 bg-card/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Student Status
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {students.map((student) => (
-                      <motion.div
-                        key={student.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className={`p-4 rounded-xl border ${getStatusColor(student.status)} backdrop-blur-sm`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(student.status)}
-                            <span className="font-medium">{student.name}</span>
-                          </div>
-                          <Badge variant="outline" className={getStatusColor(student.status)}>
-                            {student.status}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-1">{student.email}</p>
-                        {student.confidence && (
-                          <p className="text-xs text-muted-foreground">
-                            Confidence: {Math.round(student.confidence * 100)}%
-                          </p>
-                        )}
-                        {student.lastSeen && (
-                          <p className="text-xs text-muted-foreground">
-                            Last seen: {student.lastSeen.toLocaleTimeString()}
-                          </p>
-                        )}
-                      </motion.div>
-                    ))}
-                  </div>
+                  <WebRTCClient label="Scanning for faces..." />
                 </CardContent>
               </Card>
             </motion.div>
@@ -209,41 +155,94 @@ export function TeacherDashboard() {
           )}
         </TabsContent>
 
-        <TabsContent value="history" className="space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="space-y-4"
-          >
-            {attendanceHistory.map((session) => (
-              <Card key={session.id} className="border-0 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-colors">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-semibold">{session.className}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {session.date.toLocaleDateString()} • {session.duration} minutes
-                      </p>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <div className="flex items-center gap-2">
-                        <UserCheck className="w-4 h-4 text-green-500" />
-                        <span className="font-semibold text-green-600">{session.presentStudents}</span>
-                        <span className="text-muted-foreground">/</span>
-                        <span className="text-muted-foreground">{session.totalStudents}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {Math.round((session.presentStudents / session.totalStudents) * 100)}% attendance
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </motion.div>
-        </TabsContent>
+        <AttendanceHistoryTab attendanceHistory={attendanceHistory} />
       </Tabs>
     </div>
+  );
+}
+
+function studentStatusGrid({ students }: { students: Student[] }) {
+  return (
+    <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="w-5 h-5" />
+          Student Status
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {students.map((student) => (
+            <motion.div
+              key={student.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className={`p-4 rounded-xl border ${getStatusColor(student.status)} backdrop-blur-sm`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {getStatusIcon(student.status)}
+                  <span className="font-medium">{student.name}</span>
+                </div>
+                <Badge variant="outline" className={getStatusColor(student.status)}>
+                  {student.status}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-1">{student.email}</p>
+              {student.confidence && (
+                <p className="text-xs text-muted-foreground">
+                  Confidence: {Math.round(student.confidence * 100)}%
+                </p>
+              )}
+              {student.lastSeen && (
+                <p className="text-xs text-muted-foreground">
+                  Last seen: {student.lastSeen.toLocaleTimeString()}
+                </p>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AttendanceHistoryTab({ attendanceHistory }: { attendanceHistory: AttendanceSession[] }) {
+  return (
+    <TabsContent value="history" className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="space-y-4"
+      >
+        {attendanceHistory.map((session) => (
+          <Card key={session.id} className="border-0 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold">{session.className}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {session.date.toLocaleDateString()} • {session.duration} minutes
+                  </p>
+                </div>
+                <div className="text-right space-y-1">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-green-500" />
+                    <span className="font-semibold text-green-600">{session.presentStudents}</span>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-muted-foreground">{session.totalStudents}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {Math.round((session.presentStudents / session.totalStudents) * 100)}% attendance
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </motion.div>
+    </TabsContent>
   );
 }

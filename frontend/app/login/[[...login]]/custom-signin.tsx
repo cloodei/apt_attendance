@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import { useForm } from "react-hook-form";
 import { useState } from "react";
 import { useSignIn } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
@@ -9,47 +10,53 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+type FormData = {
+  email: string;
+  password: string;
+};
+
 export function CustomSignIn() {
   const { isLoaded, signIn, setActive } = useSignIn();
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting, errors },
+    setError,
+  } = useForm<FormData>();
+
+  const onSubmit = async (data: FormData) => {
     if (!isLoaded)
       return;
 
-    setIsLoading(true);
-    setError("");
-
     try {
       const result = await signIn.create({
-        identifier: email,
-        password,
+        identifier: data.email,
+        password: data.password,
       });
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        router.push("/dashboard");
       }
       else {
-        setError("Sign in failed. Please try again.");
+        setError("root", {
+          message: "Sign in failed. Please try again.",
+          type: "manual",
+        });
       }
     }
     catch (err: any) {
       console.error("Sign in error:", err);
-      setError(err.errors?.[0]?.message || "An error occurred during sign in");
-    }
-    finally {
-      setIsLoading(false);
+      setError("root", {
+        message: err.errors?.[0]?.message || "An error occurred during sign in",
+        type: "manual",
+      });
     }
   };
 
-  if (!isLoaded) {
+  if (!isLoaded)
     return (
       <div className="w-full max-w-md">
         <Card className="border-0 bg-card/80 backdrop-blur-xl shadow-2xl">
@@ -59,8 +66,7 @@ export function CustomSignIn() {
           </CardContent>
         </Card>
       </div>
-    );
-  }
+    )
 
   return (
     <motion.div
@@ -88,18 +94,18 @@ export function CustomSignIn() {
         </CardHeader>
 
         <CardContent>
-          {error && (
+          {errors.root && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-600"
             >
               <AlertCircle className="w-4 h-4" />
-              <span className="text-sm">{error}</span>
+              <span className="text-sm">{errors.root.message}</span>
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium text-foreground/80">
@@ -111,10 +117,9 @@ export function CustomSignIn() {
                     id="email"
                     type="text"
                     placeholder="Enter your account ID"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 h-12 border-border/50 focus:border-cyan-400/50 focus:ring-cyan-400/20"
                     required
+                    {...register("email")}
                   />
                 </div>
               </div>
@@ -129,10 +134,9 @@ export function CustomSignIn() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 h-12 border-border/50 focus:border-cyan-400/50 focus:ring-cyan-400/20"
                     required
+                    {...register("password")}
                   />
                   <Button
                     type="button"
@@ -158,9 +162,9 @@ export function CustomSignIn() {
               <Button
                 type="submit"
                 className="w-full h-10 dark:bg-red-500/50 bg-primary/90 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                disabled={isLoading}
+                disabled={isSubmitting}
               >
-                {isLoading ? (
+                {isSubmitting ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Signing in...

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APT Attendance WebRTC Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .video-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .video-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        video {
+            width: 100%;
+            max-width: 500px;
+            height: 300px;
+            background: #000;
+            border-radius: 8px;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 0 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+        .error {
+            background: rgba(255, 0, 0, 0.3);
+            color: #ffcccc;
+        }
+        .success {
+            background: rgba(0, 255, 0, 0.3);
+            color: #ccffcc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>APT Attendance WebRTC Test</h1>
+        
+        <div class="video-container">
+            <div class="video-box">
+                <h3>Local Camera</h3>
+                <video id="localVideo" autoplay muted></video>
+                <div class="controls">
+                    <button id="startLocal">Start Local Camera</button>
+                    <button id="stopLocal" disabled>Stop Local Camera</button>
+                </div>
+            </div>
+            
+            <div class="video-box">
+                <h3>Server Stream (WebRTC)</h3>
+                <video id="remoteVideo" autoplay></video>
+                <div class="controls">
+                    <button id="connectServer">Connect to Server</button>
+                    <button id="disconnectServer" disabled>Disconnect</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status" id="status">
+            Ready to test WebRTC functionality
+        </div>
+        
+        <div class="controls">
+            <button id="testSetup">Test Setup</button>
+            <button id="checkStatus">Check Server Status</button>
+        </div>
+    </div>
+
+    <script>
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const status = document.getElementById('status');
+        
+        let localStream = null;
+        let peerConnection = null;
+        let websocket = null;
+        let clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Local camera functions
+        async function startLocalCamera() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 },
+                    audio: false 
+                });
+                localVideo.srcObject = localStream;
+                
+                document.getElementById('startLocal').disabled = true;
+                document.getElementById('stopLocal').disabled = false;
+                
+                updateStatus('Local camera started', 'success');
+            } catch (error) {
+                updateStatus(`Local camera error: ${error.message}`, 'error');
+            }
+        }
+
+        function stopLocalCamera() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                localVideo.srcObject = null;
+                
+                document.getElementById('startLocal').disabled = false;
+                document.getElementById('stopLocal').disabled = true;
+                
+                updateStatus('Local camera stopped', 'success');
+            }
+        }
+
+        // WebRTC server connection functions
+        async function connectToServer() {
+            try {
+                updateStatus('Connecting to server...', '');
+                
+                // Create WebSocket connection
+                websocket = new WebSocket(`ws://localhost:8000/ws/${clientId}`);
+                
+                websocket.onopen = () => {
+                    updateStatus('WebSocket connected, creating WebRTC offer...', '');
+                };
+                
+                websocket.onclose = () => {
+                    updateStatus('WebSocket disconnected', 'error');
+                };
+                
+                websocket.onerror = (error) => {
+                    updateStatus(`WebSocket error: ${error}`, 'error');
+                };
+                
+                websocket.onmessage = async (event) => {
+                    const message = JSON.parse(event.data);
+                    
+                    if (message.type === 'answer') {
+                        const answer = new RTCSessionDescription({
+                            type: 'answer',
+                            sdp: message.sdp
+                        });
+                        
+                        if (peerConnection) {
+                            await peerConnection.setRemoteDescription(answer);
+                        }
+                    }
+                };
+
+                // Create RTCPeerConnection
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                });
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: event.candidate
+                        }));
+                    }
+                };
+
+                // Handle incoming video stream
+                peerConnection.ontrack = (event) => {
+                    console.log('Received remote track');
+                    if (remoteVideo && event.streams[0]) {
+                        remoteVideo.srcObject = event.streams[0];
+                        updateStatus('WebRTC connection established!', 'success');
+                    }
+                };
+
+                // Handle connection state changes
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('Connection state:', peerConnection.connectionState);
+                    if (peerConnection.connectionState === 'connected') {
+                        updateStatus('WebRTC connected successfully!', 'success');
+                    } else if (peerConnection.connectionState === 'disconnected' || 
+                               peerConnection.connectionState === 'failed') {
+                        updateStatus('WebRTC connection lost', 'error');
+                    }
+                };
+
+                // Wait for WebSocket to be ready
+                await new Promise((resolve) => {
+                    if (websocket.readyState === WebSocket.OPEN) {
+                        resolve(true);
+                    } else {
+                        websocket.onopen = () => resolve(true);
+                    }
+                });
+
+                // Create offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                // Send offer to server
+                websocket.send(JSON.stringify({
+                    type: 'offer',
+                    sdp: offer.sdp
+                }));
+
+                document.getElementById('connectServer').disabled = true;
+                document.getElementById('disconnectServer').disabled = false;
+
+            } catch (error) {
+                updateStatus(`Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        function disconnectFromServer() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+            
+            remoteVideo.srcObject = null;
+            
+            document.getElementById('connectServer').disabled = false;
+            document.getElementById('disconnectServer').disabled = true;
+            
+            updateStatus('Disconnected from server', 'success');
+        }
+
+        // Utility functions
+        function updateStatus(message, type = '') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        async function testSetup() {
+            updateStatus('Testing setup...', '');
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/status');
+                const data = await response.json();
+                
+                updateStatus(`Server status: Camera active: ${data.camera_active}, Connections: ${data.active_connections}`, 'success');
+            } catch (error) {
+                updateStatus(`Server not responding: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('http://localhost:8000/api/status');
+                const data = await response.json();
+                
+                updateStatus(`Server Status - Camera: ${data.camera_active ? 'Active' : 'Inactive'}, Connections: ${data.active_connections}, Peers: ${data.peer_connections}`, 'success');
+            } catch (error) {
+                updateStatus(`Cannot connect to server: ${error.message}`, 'error');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('startLocal').addEventListener('click', startLocalCamera);
+        document.getElementById('stopLocal').addEventListener('click', stopLocalCamera);
+        document.getElementById('connectServer').addEventListener('click', connectToServer);
+        document.getElementById('disconnectServer').addEventListener('click', disconnectFromServer);
+        document.getElementById('testSetup').addEventListener('click', testSetup);
+        document.getElementById('checkStatus').addEventListener('click', checkStatus);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopLocalCamera();
+            disconnectFromServer();
+        });
+    </script>
+</body>
+</html>

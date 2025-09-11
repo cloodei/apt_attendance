@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,22 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Camera, 
   Users, 
-  Clock, 
   CheckCircle, 
   XCircle, 
   AlertCircle,
   BarChart3,
-  Calendar,
   UserCheck,
-  UserX,
   Play,
-  Pause,
-  Square,
-  LogOut
 } from "lucide-react";
 import { FaceCamera } from "./face-camera";
-import { useClerk } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 
 interface Student {
   id: string;
@@ -42,17 +34,11 @@ interface AttendanceSession {
   totalStudents: number;
   presentStudents: number;
   duration: number;
-}
+} 
 
-interface TeacherDashboardProps {
-  user: any; // Clerk user object
-}
-
-export function TeacherDashboard({ user }: TeacherDashboardProps) {
-  const { signOut } = useClerk();
-  const router = useRouter();
+export function TeacherDashboard() {
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
-  const [currentSession, setCurrentSession] = useState<string | null>(null);
+  const [, setCurrentSession] = useState<string | null>(null);
   const [students, setStudents] = useState<Student[]>([
     { id: '1', name: 'Alice Johnson', email: 'alice@example.com', status: 'present', lastSeen: new Date(), confidence: 0.95 },
     { id: '2', name: 'Bob Smith', email: 'bob@example.com', status: 'present', lastSeen: new Date(), confidence: 0.87 },
@@ -62,7 +48,7 @@ export function TeacherDashboard({ user }: TeacherDashboardProps) {
     { id: '6', name: 'Frank Miller', email: 'frank@example.com', status: 'absent' },
   ]);
 
-  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceSession[]>([
+  const [attendanceHistory] = useState<AttendanceSession[]>([
     {
       id: '1',
       className: 'Computer Science 101',
@@ -89,23 +75,9 @@ export function TeacherDashboard({ user }: TeacherDashboardProps) {
     }
   ]);
 
-  const presentCount = students.filter(s => s.status === 'present').length;
-  const absentCount = students.filter(s => s.status === 'absent').length;
-  const pendingCount = students.filter(s => s.status === 'pending').length;
-
   const startAttendance = () => {
     setIsTakingAttendance(true);
     setCurrentSession(Date.now().toString());
-  };
-
-  const stopAttendance = () => {
-    setIsTakingAttendance(false);
-    setCurrentSession(null);
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/login');
   };
 
   const getStatusIcon = (status: Student['status']) => {
@@ -219,8 +191,8 @@ export function TeacherDashboard({ user }: TeacherDashboardProps) {
               transition={{ duration: 0.6 }}
               className="text-center py-12"
             >
-              <div className="w-24 h-24 bg-gradient-to-br from-cyan-400/20 to-blue-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <Camera className="w-12 h-12 text-cyan-400" />
+              <div className="w-24 h-24 bg-gradient-to-br from-primary/20 to-foreground/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Camera className="w-12 h-12 text-primary" />
               </div>
               <h3 className="text-2xl font-semibold mb-2">Ready to Start Attendance</h3>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
@@ -228,7 +200,7 @@ export function TeacherDashboard({ user }: TeacherDashboardProps) {
               </p>
               <Button
                 onClick={startAttendance}
-                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-8 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
+                className="bg-gradient-to-r from-primary to-foreground/80 hover:from-primary hover:to-foreground text-white px-8 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Play className="w-5 h-5 mr-2" />
                 Start Attendance Session

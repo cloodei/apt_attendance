@@ -1,37 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { ArrowLeft, Plus, Search, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { listAllStudents, createClass } from "@/lib/data";
+import { apiSearchStudents, apiCreateClass, type StudentRef } from "@/lib/api";
 import { toast } from "sonner";
+import { useUser } from "@clerk/nextjs";
 
 export default function NewClassPage() {
   const router = useRouter();
+  const { user, isLoaded } = useUser();
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [results, setResults] = useState<StudentRef[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
-  const all = listAllStudents();
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q)
-      return all;
+  useEffect(() => {
+    const q = query.trim();
+    let cancelled = false;
+    async function run() {
+      if (!q) {
+        setResults([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const res = await apiSearchStudents(q);
+        if (!cancelled) setResults(res);
+      } catch (e: any) {
+        if (!cancelled) toast.error(e.message || "Failed to search students");
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }
+    const t = setTimeout(run, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query]);
 
-    return all.filter((s) =>
-      s.id.toLowerCase().includes(q) ||
-      s.name.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q)
-    );
-  }, [all, query]);
-
-  function toggle(id: string) {
+  function toggle(id: number) {
     setSelected((prev) => {
       const n = new Set(prev);
       if (n.has(id))
@@ -43,16 +56,30 @@ export default function NewClassPage() {
     });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Please enter a class name");
       return;
     }
+    if (!isLoaded || !user) {
+      toast.error("User not loaded. Please sign in again.");
+      return;
+    }
+    try {
+      const cls = await apiCreateClass({
+        account_id: user.id,
+        name: name.trim(),
+        subject: subject.trim(),
+        student_ids: Array.from(selected),
+      });
 
-    const cls = createClass({ name: name.trim(), subject: subject.trim(), studentIds: Array.from(selected) });
-    toast.success("Class created successfully");
-    router.push(`/dashboard/classes/${cls.id}`);
+      toast.success("Class created successfully");
+      router.push(`/dashboard/classes/${cls.id}`);
+    }
+    catch (err: any) {
+      toast.error(err.message || "Failed to create class");
+    }
   }
 
   return (
@@ -87,13 +114,19 @@ export default function NewClassPage() {
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by id, name or email" className="pl-9" />
+                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by id or name" className="pl-9" />
               </div>
 
               <div className="max-h-80 overflow-auto rounded-lg border divide-y divide-border/60">
-                {filtered.map((s, idx) => (
+                {!query.trim() && (
+                  <div className="p-6 text-sm text-muted-foreground text-center">Type to search students by id or name.</div>
+                )}
+                {query.trim() && searching && (
+                  <div className="p-6 text-sm text-muted-foreground text-center">Searching…</div>
+                )}
+                {query.trim() && !searching && results.map((s, idx) => (
                   <motion.label
-                    key={idx}
+                    key={s.id}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: idx * 0.02 }}
@@ -107,12 +140,11 @@ export default function NewClassPage() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{s.name} <span className="text-xs text-muted-foreground">({s.id})</span></div>
-                      <div className="text-sm text-muted-foreground truncate">{s.email}</div>
                     </div>
                     {selected.has(s.id) && <Check className="w-4 h-4 text-emerald-500" />}
                   </motion.label>
                 ))}
-                {filtered.length === 0 && (
+                {query.trim() && !searching && results.length === 0 && (
                   <div className="p-6 text-sm text-muted-foreground text-center">No students match your search.</div>
                 )}
               </div>

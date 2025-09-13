@@ -1,10 +1,12 @@
 import { Header } from "@/components/header";
 import { Toaster } from "@/components/ui/sonner";
 import { Background } from "@/components/bg";
+import { UserBootstrapper } from "@/components/user-bootstrap";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen relative overflow-hidden">
+      <UserBootstrapper />
       <Header />
       <Background />
 

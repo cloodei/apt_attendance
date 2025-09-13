@@ -3,6 +3,7 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, CameraOff, CheckCircle, Users, Zap, Wifi, WifiOff } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 export type WebRTCClientProps = {
   className?: string;
@@ -16,6 +17,12 @@ export type WebRTCClientProps = {
   confidence?: number;
   /** Server URL for WebRTC connection */
   serverUrl?: string;
+  /** Optional roster to inform backend of valid student ids to match: array of {id, name} */
+  students?: Array<{ id: number; name: string }>;
+  /** Session id for this live run (for attendance writing) */
+  sessionId?: number;
+  /** End time (ISO) when the run should auto-stop on both client and server */
+  endTimeISO?: string;
 };
 
 export function WebRTCClient({ 
@@ -23,7 +30,11 @@ export function WebRTCClient({
   label, 
   isRecognizing = false, 
   facesDetected = 0, 
-  confidence = 0
+  confidence = 0,
+  serverUrl,
+  students,
+  sessionId,
+  endTimeISO
 }: WebRTCClientProps) {
   const pcRef = React.useRef<RTCPeerConnection | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -54,7 +65,8 @@ export function WebRTCClient({
     await pc.setLocalDescription(offer);
 
     try {
-      const response = await fetch('http://10.2.89.39:8080/offer', {
+      const base = serverUrl || API_BASE;
+      const response = await fetch(`${base}/offer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,6 +74,9 @@ export function WebRTCClient({
         body: JSON.stringify({
           sdp: offer.sdp,
           type: offer.type,
+          students_list: students ? Object.fromEntries(students.map(s => [String(s.id), s.name])) : undefined,
+          session_id: sessionId,
+          end_time: endTimeISO,
         }),
       });
 
@@ -95,6 +110,21 @@ export function WebRTCClient({
     setIsInitializing(false);
     setConnectionStatus('disconnected');
   };
+
+  // Auto stop on endTimeISO
+  React.useEffect(() => {
+    if (!endTimeISO) return;
+    let timer: any;
+    try {
+      const end = new Date(endTimeISO).getTime();
+      const now = Date.now();
+      const delay = Math.max(0, end - now);
+      timer = setTimeout(() => {
+        stopConnection();
+      }, delay);
+    } catch {}
+    return () => { if (timer) clearTimeout(timer); };
+  }, [endTimeISO]);
 
   return (
     <div className={"relative w-full h-full aspect-video rounded-2xl overflow-hidden border border-border/20 bg-gradient-to-br from-black/60 to-black/40 backdrop-blur-sm shadow-2xl " + (className ?? "")}>

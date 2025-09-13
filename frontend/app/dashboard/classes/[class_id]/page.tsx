@@ -1,29 +1,98 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { use, useMemo, useState } from "react";
-import { ArrowLeft, Camera, BarChart3, Play, Users, BookOpen } from "lucide-react";
+import { ArrowLeft, Camera, BarChart3, Play, Users, BookOpen, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { WebRTCClient } from "@/components/webrtc-client";
 import { AttendanceHistoryTab } from "@/components/att-history";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getClassById, getClassRoster, listSessionsForClass } from "@/lib/data";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiGetClass, apiGetClassRoster, apiStartSession, type ClassOut, type StudentRef } from "@/lib/api";
+import { toast } from "sonner";
 
-export default function ClassDetailPage({ params }: { params: Promise<{ class_id: string }> }) {
-  const { class_id } = use(params);
-  const classroom = getClassById(class_id);
-  const roster = getClassRoster(class_id);
-  const sessions = listSessionsForClass(class_id);
+export default function ClassDetailPage({ params }: { params: { class_id: string } }) {
+  const classIdStr = params.class_id;
+  const classId = Number(classIdStr);
+
+  const [cls, setCls] = useState<ClassOut | null>(null);
+  const [roster, setRoster] = useState<StudentRef[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
+  const [hour, setHour] = useState("");
+  const [minute, setMinute] = useState("");
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [endTimeISO, setEndTimeISO] = useState<string | null>(null);
 
-  const startAttendance = () => setIsTakingAttendance(true);
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      setLoading(true);
 
-  const title = useMemo(() => classroom?.name ?? "Class", [classroom]);
+      try {
+        const [c, r] = await Promise.all([
+          apiGetClass(classId),
+          apiGetClassRoster(classId),
+        ]);
+        if (!cancelled) { setCls(c); setRoster(r); }
+      }
+      catch (e: any) {
+        if (!cancelled)
+          toast.error(e.message || "Failed to load class");
+      }
+      finally {
+        if (!cancelled)
+          setLoading(false);
+      }
+    }
 
-  if (!classroom)
+    if (!Number.isNaN(classId))
+      run();
+
+    return () => { cancelled = true; };
+  }, [classId]);
+
+  const title = useMemo(() => cls?.name ?? "Class", [cls]);
+
+  function isValidTime(hh: string, mm: string) {
+    const h = Number(hh); const m = Number(mm);
+    return Number.isInteger(h) && Number.isInteger(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59;
+  }
+
+  async function startAttendance() {
+    if (!isValidTime(hour, minute)) {
+      toast.error("Please enter a valid time (HH and MM)");
+      return;
+    }
+
+    try {
+      const session = await apiStartSession(classId, Number(hour), Number(minute));
+      toast.success("Attendance session started");
+      setSessionId(session.id);
+      setEndTimeISO(session.end_time);
+      setIsTakingAttendance(true);
+    }
+    catch (e: any) {
+      toast.error(e.message || "Failed to start session");
+    }
+  }
+
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Classes
+          </Link>
+        </div>
+        <Card className="border-0 bg-card/60 backdrop-blur-md"><CardHeader><CardTitle>Loading…</CardTitle></CardHeader></Card>
+      </div>
+    )
+
+  if (!cls)
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -52,14 +121,13 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
         <CardHeader>
           <CardTitle className="text-xl sm:text-2xl flex flex-wrap items-center gap-3">
             {title}
-            {classroom?.subject && (
-              <span className="text-sm text-muted-foreground">• {classroom.subject}</span>
+            {cls.subject && (
+              <span className="text-sm text-muted-foreground">• {cls.subject}</span>
             )}
           </CardTitle>
           <CardDescription>
             <span className="inline-flex items-center gap-3 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1.5"><Users className="w-4 h-4" /> {roster.length} students</span>
-              <span className="inline-flex items-center gap-1.5"><BookOpen className="w-4 h-4" /> {sessions.length} sessions</span>
             </span>
           </CardDescription>
         </CardHeader>
@@ -97,7 +165,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
                 </CardHeader>
 
                 <CardContent>
-                  <WebRTCClient />
+                  <WebRTCClient students={roster} sessionId={sessionId ?? undefined} endTimeISO={endTimeISO ?? undefined} />
                 </CardContent>
               </Card>
             </motion.div>
@@ -109,17 +177,38 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
               className="text-center py-12"
             >
               <div className="w-24 h-24 bg-gradient-to-br from-primary/20 to-foreground/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <Camera className="w-12 h-12 text-primary" />
+                <Clock className="w-12 h-12 text-primary" />
               </div>
 
-              <h3 className="text-2xl font-semibold mb-2">Ready to Start Attendance</h3>
+              <h3 className="text-2xl font-semibold mb-2">Set start time</h3>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Click "Start Attendance" to begin the face recognition session for this class.
+                Enter the start time (24h) for today's session. Date will be set to today automatically.
               </p>
+
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="HH"
+                    inputMode="numeric"
+                    value={hour}
+                    onChange={(e) => setHour(e.target.value.replace(/[^0-9]/g, '').slice(0,2))}
+                    className="w-20 text-center"
+                  />
+                  <span className="text-lg font-semibold">:</span>
+                  <Input
+                    placeholder="MM"
+                    inputMode="numeric"
+                    value={minute}
+                    onChange={(e) => setMinute(e.target.value.replace(/[^0-9]/g, '').slice(0,2))}
+                    className="w-20 text-center"
+                  />
+                </div>
+              </div>
 
               <Button
                 onClick={startAttendance}
-                className="bg-gradient-to-r from-primary to-foreground/80 hover:from-primary hover:to-foreground text-white px-8 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300"
+                disabled={!isValidTime(hour, minute)}
+                className="bg-gradient-to-r from-primary to-foreground/80 hover:from-primary hover:to-foreground text-white px-8 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-60"
               >
                 <Play className="w-5 h-5 mr-2" />
                 Start Attendance Session
@@ -128,7 +217,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
           )}
         </TabsContent>
 
-        <AttendanceHistoryTab sessions={sessions} baseHref={`/dashboard/classes/${class_id}/sessions`} />
+        <AttendanceHistoryTab sessions={[]} baseHref={`/dashboard/classes/${classId}/sessions`} />
       </Tabs>
     </div>
   );

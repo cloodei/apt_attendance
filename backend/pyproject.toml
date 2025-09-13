@@ -24,4 +24,5 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "sqlalchemy>=2.0.43",
     "pgvector>=0.4.1",
+    "faiss-cpu>=1.12.0",
 ]

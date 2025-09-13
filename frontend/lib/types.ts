@@ -1,3 +1,11 @@
+export interface User {
+  id: number;
+  account_id: string;
+  name: string;
+  faculty: string;
+  academic_rank: string;
+}
+
 export interface AttendanceSession {
   id: string;
   classId: string; // reference to Classroom.id
@@ -21,4 +29,12 @@ export interface Classroom {
   id: string;
   name: string;
   subject: string;
+}
+
+export interface User {
+  id: number;
+  account_id: string;
+  name: string;
+  faculty: string;
+  academic_rank: string;
 }

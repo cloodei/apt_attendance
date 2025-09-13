@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={`min-h-screen bg-background antialiased ${fontSans.variable} ${fontMono.variable} ${fontHeading.variable} font-heading`}>
+        <body className={`bg-background antialiased ${fontSans.variable} ${fontMono.variable} ${fontHeading.variable} font-heading`}>
           <Providers>
             {children}
           </Providers>

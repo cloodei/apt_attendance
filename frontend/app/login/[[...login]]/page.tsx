@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { SignInCustom } from "./signin-custom";
 import { ThemeToggler } from "@/components/toggler";
+import { CustomSignIn } from "./custom-signin";
 
 export default async function Page() {
   const { isAuthenticated } = await auth();
@@ -10,11 +10,11 @@ export default async function Page() {
     redirect("/dashboard");
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-[calc(100%-64px)] relative">
       <ThemeToggler className="fixed top-2 right-2" />
 
-      <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-2 gap-4 items-center px-4 py-8">
-        <SignInCustom />
+      <div className="w-full px-4 pb-5 lg:pb-8 pt-8 lg:pt-12">
+        <CustomSignIn />
       </div>
     </div>
   );

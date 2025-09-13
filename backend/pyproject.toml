@@ -18,4 +18,10 @@ dependencies = [
     "websockets>=12.0",
     "requests>=2.32.5",
     "facenet-pytorch>=2.5.3",
+    "jinja2>=3.1.4",
+    "python-multipart>=0.0.9",
+    "cryptography>=45.0.7",
+    "psycopg2-binary>=2.9.10",
+    "sqlalchemy>=2.0.43",
+    "pgvector>=0.4.1",
 ]

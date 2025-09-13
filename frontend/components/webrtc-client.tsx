@@ -23,8 +23,7 @@ export function WebRTCClient({
   label, 
   isRecognizing = false, 
   facesDetected = 0, 
-  confidence = 0,
-  // serverUrl = "ws://10.2.89.39:8080"
+  confidence = 0
 }: WebRTCClientProps) {
   const pcRef = React.useRef<RTCPeerConnection | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -44,10 +43,8 @@ export function WebRTCClient({
     pcRef.current = pc;
 
     pc.ontrack = (event) => {
-      if (videoRef.current && event.streams && event.streams[0]) {
-        console.log('Track received, setting srcObject.');
+      if (videoRef.current && event.streams && event.streams[0])
         videoRef.current.srcObject = event.streams[0];
-      }
     };
 
     const offer = await pc.createOffer({
@@ -77,11 +74,9 @@ export function WebRTCClient({
       setActive(true);
       setIsInitializing(false);
       setConnectionStatus('connected');
-      console.log('Streaming started successfully!');
     }
     catch (error: any) {
       console.error('Error starting stream:', error);
-      alert('Could not start stream. Check console for details.');
       setError(error?.message || error || 'An error occurred while starting the stream.');
       stopConnection();
     }
@@ -99,11 +94,10 @@ export function WebRTCClient({
     setActive(false);
     setIsInitializing(false);
     setConnectionStatus('disconnected');
-    console.log('Stream stopped.');
   };
 
   return (
-    <div className={"relative w-full aspect-video rounded-2xl overflow-hidden border border-border/20 bg-gradient-to-br from-black/60 to-black/40 backdrop-blur-sm shadow-2xl " + (className ?? "")}>
+    <div className={"relative w-full h-full aspect-video rounded-2xl overflow-hidden border border-border/20 bg-gradient-to-br from-black/60 to-black/40 backdrop-blur-sm shadow-2xl " + (className ?? "")}>
       <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
 
       <div className="absolute inset-0 pointer-events-none">
@@ -209,7 +203,7 @@ export function WebRTCClient({
             whileTap={{ scale: 0.95 }}
             onClick={startConnection}
             disabled={isInitializing}
-            className="px-6 py-3 bg-emerald-500/20 backdrop-blur-sm rounded-full border border-emerald-400/30 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
+            className="lg:px-6 lg:py-3 bg-emerald-500/20 backdrop-blur-sm rounded-full border border-emerald-400/30 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
           >
             <div className="flex items-center gap-2">
               <Camera className="w-4 h-4 text-emerald-400" />
@@ -227,7 +221,7 @@ export function WebRTCClient({
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={stopConnection}
-            className="px-6 py-3 bg-red-500/20 backdrop-blur-sm rounded-full border border-red-400/30 hover:bg-red-500/30 transition-colors"
+            className="lg:px-6 lg:py-3 bg-red-500/20 backdrop-blur-sm rounded-full border border-red-400/30 hover:bg-red-500/30 transition-colors"
           >
             <div className="flex items-center gap-2">
               <CameraOff className="w-4 h-4 text-red-400" />
@@ -241,7 +235,7 @@ export function WebRTCClient({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="px-4 py-2 bg-black/60 backdrop-blur-sm rounded-full border border-white/20"
+            className="lg:px-4 lg:py-2 bg-black/60 backdrop-blur-sm rounded-full border border-white/20"
           >
             <div className="flex items-center gap-2">
               {isRecognizing ? (
@@ -285,7 +279,6 @@ export function WebRTCClient({
         )}
       </AnimatePresence>
 
-      {/* Loading state */}
       <AnimatePresence>
         {isInitializing && !error && (
           <motion.div
@@ -306,7 +299,6 @@ export function WebRTCClient({
         )}
       </AnimatePresence>
 
-      {/* Success indicator */}
       <AnimatePresence>
         {facesDetected > 0 && confidence > 0.8 && (
           <motion.div

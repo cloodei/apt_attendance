@@ -13,4 +13,5 @@ export default {
       }
     ]
   },
+  outputFileTracingRoot: "D:\\Newfolder\\yp\\apt_attendance\\frontend",
 } satisfies NextConfig;

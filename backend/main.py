@@ -1,20 +1,9 @@
 import logging
 import asyncio
 import vstrack
-import requests
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from aiortc import RTCPeerConnection, RTCSessionDescription
-
-baseURL = "http://10.2.88.228:8080"
-url = f"{baseURL}/video"
-
-headers = {
-    "Connection": "keep-alive",
-    "Referer": "http://10.2.88.228:8080/",
-    "X-Requested-With": "XMLHttpRequest"
-}
-requests.get(f"{baseURL}/settings/ffc?set=on", headers=headers, verify=False)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,9 +13,9 @@ app = FastAPI(title="APT Attendance WebRTC Server")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 pcs: set[RTCPeerConnection] = set()
@@ -47,7 +36,7 @@ async def offer(request: Request):
             pcs.discard(pc)
             print("Connection closed.")
 
-    video_track = vstrack.IPWebcamTrack()
+    video_track = vstrack.FaceDetectionTrack()
     pc.addTrack(video_track)
 
     await pc.setRemoteDescription(offer)

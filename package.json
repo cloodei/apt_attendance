@@ -7,7 +7,7 @@
     "install:frontend": "cd frontend && bun install",
     "install:backend": "cd backend && uv sync",
     "frontend": "cd frontend && bun run dev",
-    "backend": "cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8080",
+    "backend": "cd backend && bun run dev",
     "backend:webrtc": "cd backend && python run_server.py",
     "setup:all": "bun run install:frontend && bun run install:backend",
     "dev:webrtc": "concurrently \"bun run frontend\" \"bun run backend:webrtc\""

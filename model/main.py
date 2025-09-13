@@ -1,44 +1,32 @@
 import cv2
-import requests
-import numpy as np
 from PIL import Image
 from facenet_pytorch import MTCNN
 
-# Khởi tạo detector
 mtcnn = MTCNN(keep_all=True)
 
-# URL ảnh tĩnh từ IP Webcam
 # url = "http://10.2.87.162:8080/shot.jpg"
 url = "http://10.2.88.228:8080/shot.jpg"
+# url = "http://10.2.88.228:8080/video"
 
 something = None
 
 while True:
-    # Lấy ảnh từ camera
-    img_resp = requests.get(url)
-    img_arr = np.array(bytearray(img_resp.content), dtype=np.uint8)
-    frame = cv2.imdecode(img_arr, -1)
+    # img_resp = requests.get(url)
+    # img_arr = np.array(bytearray(img_resp.content), dtype=np.uint8)
+    # frame = cv2.imdecode(img_arr, -1)
 
-    # Giảm kích thước ảnh (50%)
+    ret, frame = cv2.VideoCapture(url).read()
     frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
-
-    # Chuyển sang RGB cho MTCNN
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-    # Phát hiện khuôn mặt
     boxes, probs = mtcnn.detect(img)
-    
-    # Vẽ khung lên ảnh
+
     if boxes is not None:
         for box, prob in zip(boxes, probs):
             if prob > 0.7:
                 x1, y1, x2, y2 = [int(b) for b in box]
                 something = cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-    # Hiển thị kết quả
     cv2.imshow("MTCNN Face Detection", something if something is not None else frame)
-
-    # Nhấn Q để thoát
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 

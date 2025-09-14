@@ -1,20 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { motion } from "motion/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Plus, Search, Check } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { apiSearchStudents, apiCreateClass, type StudentRef } from "@/lib/api";
-import { toast } from "sonner";
-import { useUser } from "@clerk/nextjs";
+import { type StudentRef } from "@/lib/types";
+import { apiSearchStudents, apiCreateClass } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useUser } from "@/stores/user_store";
 
 export default function NewClassPage() {
   const router = useRouter();
-  const { user, isLoaded } = useUser();
+  const user = useUser();
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [query, setQuery] = useState("");
@@ -33,11 +34,14 @@ export default function NewClassPage() {
       setSearching(true);
       try {
         const res = await apiSearchStudents(q);
-        if (!cancelled) setResults(res);
+        if (!cancelled)
+          setResults(res);
       } catch (e: any) {
-        if (!cancelled) toast.error(e.message || "Failed to search students");
+        if (!cancelled)
+          toast.error(e.message || "Failed to search students");
       } finally {
-        if (!cancelled) setSearching(false);
+        if (!cancelled)
+          setSearching(false);
       }
     }
     const t = setTimeout(run, 250);
@@ -62,13 +66,16 @@ export default function NewClassPage() {
       toast.error("Please enter a class name");
       return;
     }
-    if (!isLoaded || !user) {
+
+    if (!user) {
       toast.error("User not loaded. Please sign in again.");
       return;
     }
+
     try {
       const cls = await apiCreateClass({
-        account_id: user.id,
+        account_id: user.account_id,
+        user_id: user.id,
         name: name.trim(),
         subject: subject.trim(),
         student_ids: Array.from(selected),

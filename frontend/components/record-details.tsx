@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Check, Search, Users, X } from "lucide-react";
 
-type Status = "present" | "absent" | "pending";
+type Status = "present" | "absent";
 
 export interface RecordDetailsProps {
   session: {
@@ -19,14 +19,17 @@ export interface RecordDetailsProps {
     totalStudents: number;
     presentStudents: number;
     duration: number;
+    presenceCoveragePct?: number;
   };
   students: Array<{
     id: string;
     name: string;
-    email: string;
+    studentId: string;
     status: Status;
     lastSeenISO?: string;
     confidence?: number;
+    verified?: boolean;
+    attendancePct?: number;
   }>;
 }
 
@@ -34,29 +37,36 @@ export default function RecordDetails({ session, students }: RecordDetailsProps)
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
 
-  const dateStr = useMemo(() =>
-    new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: undefined }).format(new Date(session.dateISO)),
-  [session.dateISO]);
+  const dateStr = useMemo(() => {
+    const d = new Date(session.dateISO);
+    const date = new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(d);
+    const time = new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(d);
 
-  const percent = Math.round((session.presentStudents / session.totalStudents) * 100);
+    return `${time}, ${date}`;
+  }, [session.dateISO]);
 
   const filtered = useMemo(() => {
     return students.filter(s => {
-      const matchesQuery = `${s.name} ${s.email}`.toLowerCase().includes(query.toLowerCase());
+      const matchesQuery = `${s.name} ${s.studentId}`.toLowerCase().includes(query.toLowerCase());
       const matchesStatus = statusFilter === "all" ? true : s.status === statusFilter;
+
       return matchesQuery && matchesStatus;
     });
   }, [students, query, statusFilter]);
 
   const counts = useMemo(() => {
-    let present = 0, absent = 0, pending = 0;
+    let present = 0, absent = 0;
     for (const s of students) {
-      if (s.status === "present") present++;
-      else if (s.status === "absent") absent++;
-      else pending++;
+      if (s.status === "present") 
+        present++;
+      else 
+        absent++;
     }
-    return { present, absent, pending };
+
+    return { present, absent };
   }, [students]);
+
+  const percent = Math.round((session.presentStudents / session.totalStudents) * 100);
 
   return (
     <div className="space-y-6">
@@ -69,19 +79,21 @@ export default function RecordDetails({ session, students }: RecordDetailsProps)
               {session.totalStudents} students
             </Badge>
           </CardTitle>
-          <CardDescription>
-            {dateStr} • {session.duration} minutes • {percent}% attendance
+          <CardDescription className="text-sm text-neutral-800 dark:text-neutral-200/75 gap-3 flex flex-wrap">
+            <span>{dateStr}</span> • 
+            <span>{session.duration} minutes</span> • 
+            <span>{percent}% attendance</span> • 
+            {typeof session.presenceCoveragePct === "number" ? <span>{session.presenceCoveragePct}% coverage</span> : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Stat label="Present" value={counts.present} color="text-emerald-600" />
             <Stat label="Absent" value={counts.absent} color="text-rose-600" />
-            <Stat label="Pending" value={counts.pending} color="text-amber-600" />
           </div>
 
-          <div className="mt-4 h-2 w-full rounded-full bg-muted/40 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-emerald-500 via-primary to-foreground/80 rounded-full" style={{ width: `${percent}%` }} />
+          <div className="mt-4 h-2 w-full rounded-full bg-neutral-200 dark:bg-neutral-800/90 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-emerald-500 via-emerald-500 to-foreground rounded-full" style={{ width: `${percent}%` }} />
           </div>
         </CardContent>
       </Card>
@@ -90,7 +102,7 @@ export default function RecordDetails({ session, students }: RecordDetailsProps)
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search students by name or email"
+            placeholder="Search students by name or id"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="pl-9"
@@ -100,7 +112,6 @@ export default function RecordDetails({ session, students }: RecordDetailsProps)
           <FilterChip label="All" active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
           <FilterChip label="Present" active={statusFilter === "present"} onClick={() => setStatusFilter("present")} />
           <FilterChip label="Absent" active={statusFilter === "absent"} onClick={() => setStatusFilter("absent")} />
-          <FilterChip label="Pending" active={statusFilter === "pending"} onClick={() => setStatusFilter("pending")} />
         </div>
       </div>
 
@@ -113,53 +124,66 @@ export default function RecordDetails({ session, students }: RecordDetailsProps)
           <ul className="divide-y divide-border/60">
             {filtered.map((s, idx) => (
               <motion.li
-                key={s.id}
+                key={s.studentId}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: idx * 0.02 }}
                 className="p-4 sm:p-5"
               >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_0.8fr_1.2fr_1.2fr_0.8fr] sm:items-center">
+                  <div className="flex items-center gap-3">
                     <Avatar className="size-10">
                       <AvatarFallback>{initials(s.name)}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
                       <div className="font-medium truncate">{s.name}</div>
-                      <div className="text-sm text-muted-foreground truncate">{s.email}</div>
+                      <div className="text-sm text-muted-foreground truncate">Student ID: {s.studentId}</div>
                     </div>
                   </div>
 
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={s.status} />
-                      {s.lastSeenISO && (
-                        <span className="text-xs text-muted-foreground">last seen {formatTime(s.lastSeenISO)}</span>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={s.status} />
+                    {s.lastSeenISO && (
+                      <span className="text-xs text-muted-foreground">last seen {formatTime(s.lastSeenISO)}</span>
+                    )}
+                  </div>
 
-                    <div className="hidden sm:flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Confidence</span>
-                      <div className="h-1.5 w-28 rounded-full bg-muted/40 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${barColor(s.confidence)}`}
-                          style={{ width: `${Math.round((s.confidence ?? 0) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground w-8 text-right">
-                        {s.confidence ? Math.round(s.confidence * 100) : 0}%
-                      </span>
+                  <div className="hidden sm:flex items-center justify-center gap-3 w-full">
+                    <span className="text-xs text-muted-foreground">Confidence</span>
+                    <div className="h-1.5 w-28 rounded-full bg-muted/40 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${barColor(s.confidence)}`}
+                        style={{ width: `${Math.round((s.confidence ?? 0) * 100)}%` }}
+                      />
                     </div>
+                    <span className="text-xs text-muted-foreground w-12 text-center tabular-nums">
+                      {s.confidence ? Math.round(s.confidence * 100) : 0}%
+                    </span>
+                  </div>
 
-                    <div className="sm:justify-self-end">
-                      {s.status === "present" ? (
+                  <div className="hidden sm:flex items-center justify-center gap-3 w-full">
+                    <span className="text-xs text-muted-foreground">Time in class</span>
+                    <div className="h-1.5 w-28 rounded-full bg-muted/40 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${Math.max(0, Math.min(100, s.attendancePct ?? 0))}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-12 text-center tabular-nums">
+                      {Math.max(0, Math.min(100, s.attendancePct ?? 0))}%
+                    </span>
+                  </div>
+
+                  <div className="sm:justify-self-end flex sm:justify-center">
+                    {s.status === "present" ? (
+                      s.verified ? (
                         <Badge className="bg-emerald-600 text-white"><Check className="w-3.5 h-3.5 mr-1" /> Verified</Badge>
-                      ) : s.status === "absent" ? (
-                        <Badge className="bg-rose-600 text-white"><X className="w-3.5 h-3.5 mr-1" /> Not found</Badge>
                       ) : (
-                        <Badge variant="secondary">Pending</Badge>
-                      )}
-                    </div>
+                        <Badge variant="secondary">Present</Badge>
+                      )
+                    ) : (
+                      <Badge className="bg-rose-600 text-white"><X className="w-3.5 h-3.5 mr-1" /> Not found</Badge>
+                    )}
                   </div>
                 </div>
               </motion.li>

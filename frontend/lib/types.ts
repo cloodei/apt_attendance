@@ -8,7 +8,7 @@ export interface User {
 
 export interface AttendanceSession {
   id: string;
-  classId: string; // reference to Classroom.id
+  classId: string;
   className: string;
   date: Date;
   totalStudents: number;
@@ -19,9 +19,9 @@ export interface AttendanceSession {
 export interface Student {
   id: string;
   name: string;
-  email: string; // should be student_id
+  email: string;
   status: 'present' | 'absent' | 'pending';
-  lastSeen?: Date; //should be in_time + out_time, if in_time and out_time are null then Student is Absent
+  lastSeen?: Date;
   confidence?: number;
 }
 
@@ -38,3 +38,38 @@ export interface User {
   faculty: string;
   academic_rank: string;
 }
+
+export type StudentRef = {
+  id: number;
+  name: string;
+};
+export type ClassOut = {
+  id: number;
+  user_id: number;
+  name: string;
+  subject: string;
+  status: string;
+};
+export type ClassSummary = ClassOut & {
+  roster_count: number;
+  sessions_count: number;
+};
+export type SessionOut = {
+  id: number;
+  class_id: number;
+  start_time: string;
+  end_time: string;
+};
+
+export type SessionWithStats = SessionOut & {
+  present_count: number;
+  total_students: number;
+};
+
+export type AttendanceEntry = {
+  student_id: number;
+  name: string;
+  in_time: string;
+  out_time: string | null;
+  avg_confidence?: number | null;
+};

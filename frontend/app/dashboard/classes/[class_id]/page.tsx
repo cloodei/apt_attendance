@@ -1,75 +1,87 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { motion } from "motion/react";
-import { ArrowLeft, Camera, BarChart3, Play, Users, BookOpen, Clock } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { use, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Camera, BarChart3, Play, Users, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { API_BASE } from "@/lib/utils";
 import { WebRTCClient } from "@/components/webrtc-client";
 import { AttendanceHistoryTab } from "@/components/att-history";
-import { apiGetClass, apiGetClassRoster, apiStartSession, apiListSessionsForClass, type ClassOut, type StudentRef, type SessionOut } from "@/lib/api";
-import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiGetClass, apiGetClassRoster, apiStartSession } from "@/lib/api";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+
+async function datas(classId: number) {
+  const d = await Promise.all([
+    apiGetClass(classId),
+    apiGetClassRoster(classId),
+  ]);
+  return d;
+}
 
 export default function ClassDetailPage({ params }: { params: Promise<{ class_id: string }> }) {
   const { class_id } = use(params);
   const classId = Number(class_id);
 
-  const [cls, setCls] = useState<ClassOut | null>(null);
-  const [roster, setRoster] = useState<StudentRef[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState<SessionOut[]>([]);
+  const { data, isFetching, error } = useQuery({
+    queryKey: [`cls-${classId}`],
+    queryFn: () => datas(classId),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+  const queryClient = useQueryClient();
 
-  const [isTakingAttendance, setIsTakingAttendance] = useState(false);
   const [hour, setHour] = useState("");
   const [minute, setMinute] = useState("");
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [endTimeISO, setEndTimeISO] = useState<string | null>(null);
+  const [isTakingAttendance, setIsTakingAttendance] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      setLoading(true);
+    if (!isTakingAttendance || !sessionId)
+      return;
 
+    const url = `${API_BASE}/api/sessions/${sessionId}/events`;
+    const es = new EventSource(url);
+
+    es.onmessage = (ev) => {
       try {
-        const [c, r, s] = await Promise.all([
-          apiGetClass(classId),
-          apiGetClassRoster(classId),
-          apiListSessionsForClass(classId),
-        ]);
-
-        if (!cancelled) {
-          setCls(c);
-          setRoster(r);
-          setSessions(s);
-        }
+        const data = JSON.parse(ev.data) as { name?: string; action?: string; time?: string };
+        const when = data.time ? new Date(data.time) : new Date();
+        const timeStr = new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(when);
+        const who = data.name || "A student";
+        const action = data.action === "out" ? "checked out" : "checked in";
+        toast.success(`${who} ${action} at ${timeStr}`);
       }
-      catch (e: any) {
-        if (!cancelled)
-          toast.error(e.message || "Failed to load class");
+      catch (e) {
+        console.error(e);
       }
-      finally {
-        if (!cancelled)
-          setLoading(false);
-      }
-    }
+    };
 
-    if (!Number.isNaN(classId))
-      run();
+    es.onerror = (e) => {
+      console.error(e);
+    };
 
-    return () => { cancelled = true; };
-  }, [classId]);
-
-  const title = useMemo(() => cls?.name ?? "Class", [cls]);
+    return () => {
+      es.close();
+    };
+  }, [isTakingAttendance, sessionId]);
 
   function isValidTime(hh: string, mm: string) {
     const h = Number(hh);
     const m = Number(mm);
     const time = new Date();
 
-    if ((!Number.isInteger(h) || !Number.isInteger(m)) && (h < time.getHours() && m <= time.getMinutes()))
+    if ((!Number.isInteger(h) || !Number.isInteger(m)) || (h < time.getHours() && m <= time.getMinutes()))
       return false;
 
     return h >= 0 && h <= 23 && m >= 0 && m <= 59;
@@ -87,13 +99,14 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
       setSessionId(session.id);
       setEndTimeISO(session.end_time);
       setIsTakingAttendance(true);
+      queryClient.invalidateQueries({ queryKey: ["cls-sessions", classId] });
     }
     catch (e: any) {
       toast.error(e.message || "Failed to start session");
     }
   }
 
-  if (loading)
+  if (isFetching || !data)
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -105,22 +118,8 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
       </div>
     )
 
-  if (!cls)
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Classes
-          </Link>
-        </div>
-        <Card className="border-0 bg-card/60 backdrop-blur-md">
-          <CardHeader>
-            <CardTitle>Class not found</CardTitle>
-            <CardDescription>The class you are looking for does not exist.</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+  const [cls, roster] = data;
+  const title = cls?.name ?? "Class";
 
   return (
     <div className="space-y-6">
@@ -134,8 +133,8 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
         <CardHeader>
           <CardTitle className="text-xl sm:text-2xl flex flex-wrap items-center gap-3">
             {title}
-            {cls.subject && (
-              <span className="text-sm text-muted-foreground">• {cls.subject}</span>
+            {cls?.subject && (
+              <span className="text-sm text-muted-foreground"> {cls.subject}</span>
             )}
           </CardTitle>
           <CardDescription>
@@ -195,7 +194,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
 
               <h3 className="text-2xl font-semibold mb-2">Set start time</h3>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Enter the start time (24h) for today's session. Date will be set to today automatically.
+                Enter the end time (24h) for today's session. Date will be set to today automatically.
               </p>
 
               <div className="flex items-center justify-center gap-3 mb-6">
@@ -203,6 +202,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
                   <Input
                     placeholder="HH"
                     inputMode="numeric"
+                    max={23}
                     value={hour}
                     onChange={(e) => setHour(e.target.value.replace(/[^0-9]/g, '').slice(0,2))}
                     className="w-20 text-center"
@@ -211,6 +211,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
                   <Input
                     placeholder="MM"
                     inputMode="numeric"
+                    max={59}
                     value={minute}
                     onChange={(e) => setMinute(e.target.value.replace(/[^0-9]/g, '').slice(0,2))}
                     className="w-20 text-center"
@@ -230,7 +231,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
           )}
         </TabsContent>
 
-        <AttendanceHistoryTab sessions={sessions as any} baseHref={`/dashboard/classes/${classId}/sessions`} />
+        <AttendanceHistoryTab classId={classId} className={title} baseHref={`/dashboard/classes/${classId}/sessions`} />
       </Tabs>
     </div>
   );

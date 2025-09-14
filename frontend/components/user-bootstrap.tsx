@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useUser as useClerkUser } from "@clerk/nextjs";
-import { apiGetUserByAccount } from "@/lib/api";
 import { useSetUser } from "@/stores/user_store";
+import { apiGetUserByAccount } from "@/lib/api";
 
 export function UserBootstrapper() {
   const { user, isLoaded } = useClerkUser();
@@ -22,7 +22,7 @@ export function UserBootstrapper() {
       }
 
       try {
-        const u = await apiGetUserByAccount(user.id);
+        const u = await apiGetUserByAccount(user.username!);
         if (!cancelled)
           setUser(u);
       }

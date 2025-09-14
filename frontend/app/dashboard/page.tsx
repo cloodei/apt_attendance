@@ -28,7 +28,7 @@ export default function DashboardPage() {
 
 async function ClassListWrapper() {
   const account = await currentUser();
-  const classes = await apiListClassesWithCounts(account?.id ?? "");
+  const classes = await apiListClassesWithCounts(account?.username ?? "");
 
   return <ClassList classes={classes} />;
 }

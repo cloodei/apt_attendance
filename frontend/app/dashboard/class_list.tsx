@@ -1,20 +1,21 @@
 "use client";
 
-import { ClassSummary } from "@/lib/api";
-import { motion } from "motion/react";
-import { BentoGridItem } from "@/components/mvpblocks/bento-grid-1";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { Users, BookOpen, Code } from "lucide-react";
+import { ClassSummary } from "@/lib/types";
+import { BentoGridItem } from "@/components/mvpblocks/bento-grid-1";
+import { TypeWriter } from "@/components/ui/typewriter";
 
 const containerVariants = {
   hidden: {},
   visible: {
     transition: {
       staggerChildren: 0.12,
-      delayChildren: 0.1,
-    },
-  },
-};
+      delayChildren: 0.1
+    }
+  }
+}
 
 export function ClassList({ classes }: { classes: ClassSummary[] }) {
   return (
@@ -36,12 +37,18 @@ export function ClassList({ classes }: { classes: ClassSummary[] }) {
                   <span className="inline-flex items-center gap-1.5"><BookOpen className="w-4 h-4" /> {cls.sessions_count} sessions</span>
                 </div>
               )}
+              className="dark:shadow-[0_24px_60px_rgb(255,255,255,0.04)]"
               icon={<Code className="size-6" />}
             />
           </Link>
         </motion.div>
       )) : (
-        <p>No classes found</p>
+        <div className="mt-8 mx-auto flex justify-center items-center col-span-full">
+          <TypeWriter
+            words="No classes found"
+            className="bg-gradient-to-r tracking-tighter from-sky-400/60 dark:from-sky-300 via-cyan-500/50 to-rose-400 bg-clip-text text-5xl font-bold text-transparent"
+          />
+        </div>
       )}
     </motion.div>
   );

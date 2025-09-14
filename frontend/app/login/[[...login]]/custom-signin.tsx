@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
 import { useSignIn } from "@clerk/nextjs";
+import { API_BASE } from "@/lib/utils";
+import { useSetUser } from "@/stores/user_store";
 import { 
   Eye, 
   EyeOff, 
@@ -18,13 +20,14 @@ import {
 } from "lucide-react";
 
 type FormData = {
-  email: string;
+  account_id: string;
   password: string;
 };
 
 export function CustomSignIn() {
   const { isLoaded, signIn, setActive } = useSignIn();
   const [showPassword, setShowPassword] = useState(false);
+  const setUser = useSetUser();
 
   const {
     register,
@@ -39,12 +42,25 @@ export function CustomSignIn() {
 
     try {
       const result = await signIn.create({
-        identifier: data.email,
+        identifier: data.account_id,
         password: data.password,
       });
 
       if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
+        try {
+          const [res, _] = await Promise.all([
+            fetch(`${API_BASE}/api/users/${data.account_id}`, { credentials: "include" }),
+            setActive({ session: result.createdSessionId }),
+          ]);
+
+          if (res.ok) {
+            const dbUser = await res.json();
+            setUser(dbUser);
+          }
+        }
+        catch (e) {
+          console.warn("Failed to fetch DB user post-signin", e);
+        }
       }
       else {
         setError("root", {
@@ -206,7 +222,7 @@ export function CustomSignIn() {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                   <div>
                     <label
-                      htmlFor="email"
+                      htmlFor="account_id"
                       className="mb-2 block text-sm font-semibold tracking-tight uppercase"
                     >
                       Account ID
@@ -216,12 +232,12 @@ export function CustomSignIn() {
                         <User className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
-                        id="email"
+                        id="account_id"
                         type="text"
                         placeholder="Enter your account ID"
                         className="border-border bg-input block w-full rounded-lg border py-3 pr-3 pl-10 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
                         required
-                        {...register("email")}
+                        {...register("account_id")}
                       />
                     </div>
                   </div>

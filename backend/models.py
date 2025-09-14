@@ -6,7 +6,8 @@ class StudentOut(BaseModel):
     name: str
 
 class ClassCreate(BaseModel):
-    account_id: str = Field(..., description="Clerk account_id of the teacher")
+    # account_id: str = Field(..., description="Clerk account_id of the teacher")
+    user_id: int = Field(gt=0, description="Teacher's User ID")
     name: str
     subject: str
     status: str = "active"

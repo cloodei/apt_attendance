@@ -1,20 +1,31 @@
 import logging
 import os
 import asyncio
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timezone, timedelta
+import json
 import vstrack
 from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.background import BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from aiortc import RTCPeerConnection, RTCSessionDescription
+from starlette.responses import StreamingResponse
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 import models
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="APT Attendance WebRTC Server")
+@asynccontextmanager
+async def lifespan(instance: FastAPI):
+    await pool.open()
+    yield
+    await pool.close()
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,17 +38,13 @@ app.add_middleware(
 pcs: set[RTCPeerConnection] = set()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
+if DATABASE_URL is None:
     logging.warning("DATABASE_URL is not set. API endpoints requiring DB will raise at runtime.")
+    raise RuntimeError("DATABASE_URL is not set")
+else:
+    pool = AsyncConnectionPool(conninfo=DATABASE_URL, max_size=10, kwargs={"autocommit": False}, open=False, num_workers=8)
 
-pool = AsyncConnectionPool(conninfo=DATABASE_URL, max_size=10, kwargs={"autocommit": False})
-
-# @app.on_event("startup")
-# async def on_startup():
-#     # Ensure pool is initialized
-#     global pool
-#     if DATABASE_URL and pool is None:
-#         pool = AsyncConnectionPool(conninfo=DATABASE_URL, min_size=1, max_size=10, kwargs={"autocommit": False})
+LOCAL_TZ = datetime.now().astimezone().tzinfo or timezone.utc
 
 @app.post("/offer")
 async def offer(request: Request):
@@ -95,7 +102,7 @@ async def search_students(query: str = Query(..., min_length=1)):
             return [models.StudentOut(id=row["id"], name=row["name"]) for row in rows]
 
 @app.post("/api/sessions/{session_id}/attendance/ping")
-async def attendance_ping(session_id: int, student_id: int, confidence: float):
+async def attendance_ping(session_id: int, student_id: int):
     """
     Toggle attendance for a student in a given session.
     - If a row exists with in_time NOT NULL and out_time NULL, set out_time = now (checkout)
@@ -104,42 +111,27 @@ async def attendance_ping(session_id: int, student_id: int, confidence: float):
     """
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
-            # Ensure session exists
             await cur.execute("SELECT 1 FROM \"SESSIONS\" WHERE id = %s", (session_id,))
             if await cur.fetchone() is None:
                 raise HTTPException(status_code=404, detail="Session not found")
 
-            # Single atomic operation: try set in_time if NULL, else set out_time if open, else insert a new row.
             await cur.execute(
                 """
-                WITH updated_in AS (
-                    UPDATE "ATTENDANCES"
-                    SET in_time = COALESCE(in_time, NOW()),
-                        confidence = GREATEST(COALESCE(confidence, 0), %s)
-                    WHERE session_id = %s AND student_id = %s AND in_time IS NULL
-                    RETURNING 1
-                ),
-                updated_out AS (
+                WITH updated_out AS (
                     UPDATE "ATTENDANCES"
                     SET out_time = NOW()
-                    WHERE session_id = %s AND student_id = %s
-                      AND in_time IS NOT NULL AND out_time IS NULL
-                      AND NOT EXISTS (SELECT 1 FROM updated_in)
+                    WHERE session_id = %s AND student_id = %s AND out_time IS NULL
                     RETURNING 1
                 ),
                 ins AS (
-                    INSERT INTO "ATTENDANCES" (session_id, student_id, in_time, out_time, confidence)
-                    SELECT %s, %s, NOW(), NULL, %s
-                    WHERE NOT EXISTS (SELECT 1 FROM updated_in)
-                      AND NOT EXISTS (SELECT 1 FROM updated_out)
+                    INSERT INTO "ATTENDANCES" (session_id, student_id, confidence, in_time, out_time)
+                    SELECT %s, %s, %s, NOW(), NULL
+                    WHERE NOT EXISTS (SELECT 1 FROM updated_out)
                     RETURNING 1
                 )
-                SELECT CASE
-                    WHEN EXISTS (SELECT 1 FROM updated_out) THEN 'checked_out'
-                    ELSE 'checked_in'
-                END AS status;
+                SELECT CASE WHEN EXISTS (SELECT 1 FROM updated_out) THEN 'checked_out' ELSE 'checked_in' END AS status;
                 """,
-                (confidence, session_id, student_id, session_id, student_id, session_id, student_id, confidence),
+                (session_id, student_id, session_id, student_id, 0.0),
             )
             res = await cur.fetchone()
             await conn.commit()
@@ -149,19 +141,13 @@ async def attendance_ping(session_id: int, student_id: int, confidence: float):
 async def create_class(payload: models.ClassCreate):
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute("SELECT id FROM \"USERS\" WHERE account_id = %s", (payload.account_id,))
-            user_row = await cur.fetchone()
-            if not user_row:
-                raise HTTPException(status_code=400, detail="User not found for provided account_id")
-            user_id = int(user_row["id"])
-
             await cur.execute(
                 """
                 INSERT INTO "CLASSES" (user_id, name, subject, status)
                 VALUES (%s, %s, %s, %s)
-                RETURNING id, user_id, name, subject, status
-                """, # return only ID here 
-                (user_id, payload.name, payload.subject, payload.status),
+                RETURNING id
+                """,
+                (payload.user_id, payload.name, payload.subject, payload.status),
             )
             cls = await cur.fetchone()
             class_id = int(cls["id"])
@@ -173,16 +159,10 @@ async def create_class(payload: models.ClassCreate):
                 )
 
             await conn.commit()
-            return models.ClassOut(
-                id=class_id,
-                user_id=cls["user_id"],
-                name=cls["name"],
-                subject=cls["subject"],
-                status=cls["status"],
-            )
+            return models.ClassOut(id=class_id, user_id=payload.user_id, name=payload.name, subject=payload.subject, status=payload.status)
 
 @app.get("/api/classes", response_model=list[models.ClassOut])
-async def list_classes(account_id: str = Query(..., description="Clerk account_id of the teacher")):
+async def list_classes(user_id: int = Query(..., description="User ID of the teacher")):
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -190,19 +170,17 @@ async def list_classes(account_id: str = Query(..., description="Clerk account_i
                 SELECT c.id, c.user_id, c.name, c.subject, c.status
                 FROM "CLASSES" c
                 JOIN "USERS" u ON u.id = c.user_id
-                WHERE u.account_id = %s
+                WHERE u.id = %s
                 ORDER BY c.id DESC
                 """,
-                (account_id,),
+                (user_id,),
             )
             rows = await cur.fetchall()
             return [models.ClassOut(id=r["id"], user_id=r["user_id"], name=r["name"], subject=r["subject"], status=r["status"]) for r in rows]
 
 
 @app.get("/api/classes/with-counts", response_model=list[models.ClassSummaryOut])
-async def list_classes_with_counts(account_id: str = Query(..., description="Clerk account_id of the teacher")):
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+async def list_classes_with_counts(account_id: str = Query(..., description="User ID of the teacher")):
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -232,8 +210,6 @@ async def list_classes_with_counts(account_id: str = Query(..., description="Cle
 
 @app.get("/api/classes/{class_id}", response_model=models.ClassOut)
 async def get_class(class_id: int):
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -241,14 +217,13 @@ async def get_class(class_id: int):
                 (class_id,),
             )
             r = await cur.fetchone()
+
             if not r:
                 raise HTTPException(status_code=404, detail="Class not found")
             return models.ClassOut(id=r["id"], user_id=r["user_id"], name=r["name"], subject=r["subject"], status=r["status"])
 
-@app.get("/api/users/by-account/{account_id}", response_model=models.UserOut)
-async def get_user_by_account(account_id: str):
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
+@app.get("/api/users/{account_id}", response_model=models.UserOut)
+async def get_user_by_account_id(account_id: str):
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -258,14 +233,10 @@ async def get_user_by_account(account_id: str):
             r = await cur.fetchone()
             if not r:
                 raise HTTPException(status_code=404, detail="User not found")
-            return models.UserOut(
-                id=r["id"], account_id=r["account_id"], name=r["name"], faculty=r["faculty"], academic_rank=r["academic_rank"]
-            )
+            return models.UserOut(id=r["id"], account_id=r["account_id"], name=r["name"], faculty=r["faculty"], academic_rank=r["academic_rank"])
 
 @app.get("/api/classes/{class_id}/students", response_model=list[models.StudentOut])
 async def get_class_students(class_id: int):
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -283,12 +254,13 @@ async def get_class_students(class_id: int):
 
 @app.post("/api/classes/{class_id}/sessions")
 async def start_session(class_id: int, payload: models.SessionStartIn, background: BackgroundTasks):
-    now = datetime.now(timezone.utc)
-    today_utc = now.date()
-    end_dt = datetime.combine(today_utc, time(payload.hour, payload.minute, tzinfo=timezone.utc))
-    if end_dt <= now:
+    now_local = datetime.now(LOCAL_TZ)
+    end_local = datetime.combine(now_local.date(), time(payload.hour, payload.minute, tzinfo=LOCAL_TZ))
+    now_utc = now_local.astimezone(timezone.utc)
+    end_dt = end_local.astimezone(timezone.utc)
+    if end_dt <= now_utc:
         raise HTTPException(status_code=400, detail="End time must be later than current time")
-    start_dt = now
+    start_dt = now_utc
 
     if pool is None:
         raise HTTPException(status_code=500, detail="Database not configured")
@@ -309,40 +281,12 @@ async def start_session(class_id: int, payload: models.SessionStartIn, backgroun
             row = await cur.fetchone()
             session_id = int(row["id"])
 
-            # Commit the session creation promptly
             await conn.commit()
-
-            # Fire-and-forget: pre-create attendance rows after responding
-            background.add_task(precreate_attendance_rows, session_id, class_id)
-
             return {"id": session_id, "class_id": class_id, "start_time": start_dt.isoformat(), "end_time": end_dt.isoformat()}
-
-
-async def precreate_attendance_rows(session_id: int, class_id: int):
-    if pool is None:
-        return
-    try:
-        async with pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute(
-                    """
-                    INSERT INTO "ATTENDANCES" (session_id, student_id, in_time, out_time, confidence)
-                    SELECT %s, sl.student_id, NULL, NULL, 0.0
-                    FROM "STUDENT_LIST" sl
-                    WHERE sl.class_id = %s
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (session_id, class_id),
-                )
-                await conn.commit()
-    except Exception:
-        pass
 
 
 @app.get("/api/classes/{class_id}/sessions", response_model=list[models.SessionOut])
 async def list_sessions_for_class(class_id: int):
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -355,10 +299,178 @@ async def list_sessions_for_class(class_id: int):
                 (class_id,),
             )
             rows = await cur.fetchall()
-            return [
-                {"id": r["id"], "class_id": r["class_id"], "start_time": r["start_time"].isoformat(), "end_time": r["end_time"].isoformat()}  # type: ignore
-                for r in rows
-            ]
+            out = []
+            for r in rows:
+                st = r["start_time"].astimezone(LOCAL_TZ) if r["start_time"].tzinfo else r["start_time"].replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+                et = r["end_time"].astimezone(LOCAL_TZ) if r["end_time"].tzinfo else r["end_time"].replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+                out.append({"id": r["id"], "class_id": r["class_id"], "start_time": st.isoformat(), "end_time": et.isoformat()})
+            return out
+
+
+@app.get("/api/classes/{class_id}/sessions/with-stats")
+async def list_sessions_with_stats(class_id: int):
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                SELECT s.id, s.class_id, s.start_time, s.end_time,
+                       (SELECT COUNT(*) FROM "ATTENDANCES" a WHERE a.session_id = s.id) AS present_count,
+                       (SELECT COUNT(*) FROM "STUDENT_LIST" sl WHERE sl.class_id = s.class_id) AS total_students
+                FROM "SESSIONS" s
+                WHERE s.class_id = %s
+                ORDER BY s.start_time DESC
+                """,
+                (class_id,),
+            )
+            rows = await cur.fetchall()
+            out = []
+            for r in rows:
+                st = r["start_time"].astimezone(LOCAL_TZ) if r["start_time"].tzinfo else r["start_time"].replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+                et = r["end_time"].astimezone(LOCAL_TZ) if r["end_time"].tzinfo else r["end_time"].replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+                out.append({
+                    "id": r["id"],
+                    "class_id": r["class_id"],
+                    "start_time": st.isoformat(),
+                    "end_time": et.isoformat(),
+                    "present_count": int(r["present_count"] or 0),
+                    "total_students": int(r["total_students"] or 0),
+                })
+            return out
+
+
+@app.post("/api/sessions/{session_id}/attendance/bulk")
+async def attendance_bulk(session_id: int, payload: list[dict]):
+    """
+    Bulk insert attendance at the end of a session. Payload items: { student_id: int, in_time: ISO, out_time: ISO|null }
+    Times are interpreted as ISO datetimes (with tz); if naive, assumed ICT and converted to UTC for storage.
+    Ignores duplicates per (session_id, student_id).
+    """
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("SELECT 1 FROM \"SESSIONS\" WHERE id = %s", (session_id,))
+            if await cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+            params = []
+            for item in payload:
+                sid = int(item["student_id"])  # type: ignore
+                it = item.get("in_time")
+                ot = item.get("out_time")
+                try:
+                    tin = datetime.fromisoformat(it) if isinstance(it, str) else None
+                except Exception:
+                    tin = None
+                try:
+                    tout = datetime.fromisoformat(ot) if isinstance(ot, str) else None
+                except Exception:
+                    tout = None
+                conf = item.get("confidence")
+                try:
+                    confv = float(conf) if conf is not None else 0.0
+                except Exception:
+                    confv = 0.0
+                if tin is None:
+                    # skip invalid
+                    continue
+                if tin.tzinfo is None:
+                    tin = tin.replace(tzinfo=LOCAL_TZ)
+                tin = tin.astimezone(timezone.utc)
+                if tout is not None:
+                    if tout.tzinfo is None:
+                        tout = tout.replace(tzinfo=LOCAL_TZ)
+                    tout = tout.astimezone(timezone.utc)
+                params.append((session_id, sid, confv, tin, tout, session_id, sid))
+
+            if params:
+                await cur.executemany(
+                    """
+                    INSERT INTO "ATTENDANCES" (session_id, student_id, confidence, in_time, out_time)
+                    SELECT %s, %s, %s, %s, %s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM "ATTENDANCES" a WHERE a.session_id = %s AND a.student_id = %s
+                    )
+                    """,
+                    params,
+                )
+                await conn.commit()
+    return {"inserted": len(params) if 'params' in locals() else 0}
+
+
+@app.get("/api/sessions/{session_id}/attendance")
+async def list_session_attendance(session_id: int):
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                SELECT a.student_id, s.name, a.in_time, a.out_time, a.confidence AS avg_confidence
+                FROM "ATTENDANCES" a
+                JOIN "STUDENTS" s ON s.id = a.student_id
+                WHERE a.session_id = %s
+                ORDER BY a.in_time ASC
+                """,
+                (session_id,),
+            )
+            rows = await cur.fetchall()
+            out = []
+            for r in rows:
+                it = r["in_time"].astimezone(LOCAL_TZ) if r["in_time"].tzinfo else r["in_time"].replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+                ot = None
+                if r["out_time"] is not None:
+                    ot = r["out_time"].astimezone(LOCAL_TZ) if r["out_time"].tzinfo else r["out_time"].replace(tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+                out.append({
+                    "student_id": r["student_id"],
+                    "name": r["name"],
+                    "in_time": it.isoformat(),
+                    "out_time": ot.isoformat() if ot else None,
+                    "avg_confidence": r.get("avg_confidence"),
+                })
+            return out
+
+
+session_event_subs: dict[int, set[asyncio.Queue]] = {}
+
+async def publish_session_event(session_id: int, event: dict):
+    subs = session_event_subs.get(session_id)
+    if not subs:
+        return
+    for q in list(subs):
+        try:
+            await q.put(event)
+        except Exception:
+            pass
+
+
+@app.get("/api/sessions/{session_id}/events")
+async def session_events(session_id: int):
+    queue: asyncio.Queue = asyncio.Queue()
+    session_event_subs.setdefault(session_id, set()).add(queue)
+
+    async def event_gen():
+        try:
+            while True:
+                evt = await queue.get()
+                yield f"data: {json.dumps(evt)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            subs = session_event_subs.get(session_id)
+            if subs and queue in subs:
+                subs.discard(queue)
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+@app.post("/api/sessions/{session_id}/events/notify")
+async def notify_session_event(session_id: int, payload: dict):
+    evt = {
+        "session_id": session_id,
+        "student_id": payload.get("student_id"),
+        "name": payload.get("name"),
+        "action": payload.get("action"),
+        "time": payload.get("time") or datetime.now(LOCAL_TZ).isoformat(),
+    }
+    await publish_session_event(session_id, evt)
+    return {"ok": True}
 
 
 @app.on_event("shutdown")

@@ -16,7 +16,7 @@ export function LogOutBtn() {
           variant="ghost"
           className="group relative py-2 rounded-xl font-medium border-red-500/30 hover:border-red-500/50 hover:bg-red-500/5 text-red-600 hover:text-red-700 transition-all duration-300"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="sm:size-5 size-4" />
           <div className="font-medium w-0 translate-x-[100%] pl-0 opacity-0 transition-all duration-300 group-hover:w-16 group-hover:translate-x-0 group-hover:pl-2 group-hover:opacity-100">
             Sign Out
           </div>

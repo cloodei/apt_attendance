@@ -3,7 +3,7 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, CameraOff, CheckCircle, Users, Zap, Wifi, WifiOff } from "lucide-react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE } from "@/lib/utils";
 
 export type WebRTCClientProps = {
   className?: string;
@@ -107,19 +107,26 @@ export function WebRTCClient({
     setConnectionStatus('disconnected');
   };
 
-  // Auto stop on endTimeISO
   React.useEffect(() => {
-    if (!endTimeISO) return;
+    if (!endTimeISO)
+      return;
+
     let timer: any;
     try {
       const end = new Date(endTimeISO).getTime();
       const now = Date.now();
       const delay = Math.max(0, end - now);
+
       timer = setTimeout(() => {
         stopConnection();
       }, delay);
-    } catch {}
-    return () => { if (timer) clearTimeout(timer); };
+    }
+    catch {}
+
+    return () => {
+      if (timer)
+        clearTimeout(timer);
+    };
   }, [endTimeISO]);
 
   return (

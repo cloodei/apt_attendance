@@ -10,7 +10,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Header />
       <Background />
 
-      <main className="relative max-w-6xl 2xl:max-w-[1560px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="relative max-w-6xl 2xl:max-w-[1560px] mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-4 sm:py-8">
         {children}
       </main>
 

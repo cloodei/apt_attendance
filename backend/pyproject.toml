@@ -25,4 +25,5 @@ dependencies = [
     "pgvector>=0.4.1",
     "faiss-cpu>=1.12.0",
     "psycopg[binary,pool]>=3.2.10",
+    "requests-async>=0.2.4",
 ]

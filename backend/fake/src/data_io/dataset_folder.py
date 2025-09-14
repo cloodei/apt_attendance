@@ -1,13 +1,11 @@
 import cv2
 import torch
-from torchvision import datasets
 import numpy as np
-
+from torchvision import datasets
 
 def opencv_loader(path):
     img = cv2.imread(path)
     return img
-
 
 class DatasetFolderFT(datasets.ImageFolder):
     def __init__(self, root, transform=None, target_transform=None,

@@ -4,10 +4,9 @@ import math
 import torch
 import numpy as np
 import torch.nn.functional as F
-
-from src.model_lib.MiniFASNet import MiniFASNetV1, MiniFASNetV2, MiniFASNetV1SE, MiniFASNetV2SE
-from src.data_io import transform as trans
-from src.utility import get_kernel, parse_model_name
+from fake.src.data_io import transform as trans
+from fake.src.utility import get_kernel, parse_model_name
+from fake.src.model_lib.MiniFASNet import MiniFASNetV1, MiniFASNetV1SE, MiniFASNetV2, MiniFASNetV2SE
 
 MODEL_MAPPING = {
     'MiniFASNetV1': MiniFASNetV1,
@@ -15,11 +14,11 @@ MODEL_MAPPING = {
     'MiniFASNetV1SE': MiniFASNetV1SE,
     'MiniFASNetV2SE': MiniFASNetV2SE
 }
+deploy = "fake/src/resources/detection_model/deploy.prototxt"
+caffemodel = "fake/src/resources/detection_model/Widerface-RetinaFace.caffemodel"
 
 class Detection:
     def __init__(self):
-        caffemodel = "D:\\Newfolder\\yp\\apt_attendance\\model\\Silent_Face_Anti_Spoofing\\src\\resources\\detection_model\\Widerface-RetinaFace.caffemodel"
-        deploy = "D:\\Newfolder\\yp\\apt_attendance\\model\\Silent_Face_Anti_Spoofing\\src\\resources\\detection_model\\deploy.prototxt"
         self.detector = cv2.dnn.readNetFromCaffe(deploy, caffemodel)
         self.detector_confidence = 0.6
 

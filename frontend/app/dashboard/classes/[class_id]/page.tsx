@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import { motion } from "motion/react";
 import { use, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Camera, BarChart3, Play, Users, Clock } from "lucide-react";
+import { ArrowLeft, Camera, BarChart3, Play, Users, Clock, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { API_BASE } from "@/lib/utils";
-import { WebRTCClient } from "@/components/webrtc-client";
+import { WebRTCClient, stopWebRTCConnection } from "@/components/webrtc-client";
 import { AttendanceHistoryTab } from "@/components/att-history";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiGetClass, apiGetClassRoster, apiStartSession } from "@/lib/api";
@@ -45,6 +45,22 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [endTimeISO, setEndTimeISO] = useState<string | null>(null);
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
+
+  useEffect(() => {
+    function beforeUnload(e: BeforeUnloadEvent) {
+      if (!isTakingAttendance)
+        return;
+
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    if (isTakingAttendance)
+      window.addEventListener("beforeunload", beforeUnload);
+      
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+    };
+  }, [isTakingAttendance]);
 
   useEffect(() => {
     if (!isTakingAttendance || !sessionId)
@@ -157,7 +173,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="live" className="space-y-6">
+        <TabsContent value="live" forceMount className="space-y-6">
           {isTakingAttendance ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -233,6 +249,23 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
 
         <AttendanceHistoryTab classId={classId} className={title} baseHref={`/dashboard/classes/${classId}/sessions`} />
       </Tabs>
+
+      {isTakingAttendance && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-xl border bg-card/80 backdrop-blur px-4 py-3 shadow-lg flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-block size-2 rounded-full bg-rose-500 animate-pulse" />
+            <span className="text-sm">Recording in progress</span>
+          </div>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => { stopWebRTCConnection(); setIsTakingAttendance(false); }}
+            className="gap-2"
+          >
+            <Square className="w-3.5 h-3.5" /> Stop
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

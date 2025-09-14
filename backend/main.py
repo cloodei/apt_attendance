@@ -1,7 +1,7 @@
 import logging
 import os
 import asyncio
-from datetime import datetime, time, timezone, timedelta
+from datetime import datetime, time, timezone
 import json
 import vstrack
 from fastapi import FastAPI, Request, HTTPException, Query
@@ -42,7 +42,7 @@ if DATABASE_URL is None:
     logging.warning("DATABASE_URL is not set. API endpoints requiring DB will raise at runtime.")
     raise RuntimeError("DATABASE_URL is not set")
 else:
-    pool = AsyncConnectionPool(conninfo=DATABASE_URL, max_size=10, kwargs={"autocommit": False}, open=False, num_workers=8)
+    pool = AsyncConnectionPool(conninfo=DATABASE_URL, max_size=10, kwargs={"autocommit": False}, open=False, num_workers=5)
 
 LOCAL_TZ = datetime.now().astimezone().tzinfo or timezone.utc
 
@@ -262,8 +262,6 @@ async def start_session(class_id: int, payload: models.SessionStartIn, backgroun
         raise HTTPException(status_code=400, detail="End time must be later than current time")
     start_dt = now_utc
 
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database not configured")
     async with pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute("SELECT 1 FROM \"CLASSES\" WHERE id = %s", (class_id,))
@@ -353,28 +351,32 @@ async def attendance_bulk(session_id: int, payload: list[dict]):
 
             params = []
             for item in payload:
-                sid = int(item["student_id"])  # type: ignore
+                sid = int(item["student_id"])
                 it = item.get("in_time")
                 ot = item.get("out_time")
+
                 try:
                     tin = datetime.fromisoformat(it) if isinstance(it, str) else None
                 except Exception:
                     tin = None
+
                 try:
                     tout = datetime.fromisoformat(ot) if isinstance(ot, str) else None
                 except Exception:
                     tout = None
+
                 conf = item.get("confidence")
                 try:
                     confv = float(conf) if conf is not None else 0.0
                 except Exception:
                     confv = 0.0
+
                 if tin is None:
-                    # skip invalid
                     continue
                 if tin.tzinfo is None:
                     tin = tin.replace(tzinfo=LOCAL_TZ)
                 tin = tin.astimezone(timezone.utc)
+
                 if tout is not None:
                     if tout.tzinfo is None:
                         tout = tout.replace(tzinfo=LOCAL_TZ)

@@ -33,7 +33,6 @@ export function WebRTCClient({
   sessionId, 
   endTimeISO 
 }: WebRTCClientProps) {
-  const pcRef = React.useRef<RTCPeerConnection | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
 
   const [error, setError] = React.useState<string | null>(null);
@@ -41,18 +40,43 @@ export function WebRTCClient({
   const [isInitializing, setIsInitializing] = React.useState(false);
   const [connectionStatus, setConnectionStatus] = React.useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g: any = globalThis as any;
+  if (!g.__webrtc_singleton) {
+    g.__webrtc_singleton = {
+      pc: null as RTCPeerConnection | null,
+      stream: null as MediaStream | null
+    };
+  }
+  const singleton = g.__webrtc_singleton as {
+    pc: RTCPeerConnection | null;
+    stream: MediaStream | null
+  };
+
+  React.useEffect(() => {
+    if (videoRef.current && singleton.stream) {
+      try {
+        videoRef.current.srcObject = singleton.stream;
+      }
+      catch {}
+    }
+  }, []);
+
   async function startConnection() {
     setIsInitializing(true);
     setConnectionStatus('connecting');
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
-    pcRef.current = pc;
+    const pc = singleton.pc ?? new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    singleton.pc = pc;
 
     pc.ontrack = (event) => {
-      if (videoRef.current && event.streams && event.streams[0])
-        videoRef.current.srcObject = event.streams[0];
+      const stream = event.streams && event.streams[0] ? event.streams[0] : null;
+      if (stream) {
+        singleton.stream = stream;
+        if (videoRef.current) {
+          try { videoRef.current.srcObject = stream; } catch {}
+        }
+      }
     };
 
     const offer = await pc.createOffer({
@@ -94,14 +118,10 @@ export function WebRTCClient({
   };
 
   const stopConnection = () => {
-    if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
+    stopWebRTCConnection();
+    if (videoRef.current) {
+      try { videoRef.current.srcObject = null; } catch {}
     }
-
-    if (videoRef.current)
-      videoRef.current.srcObject = null;
-
     setActive(false);
     setIsInitializing(false);
     setConnectionStatus('disconnected');
@@ -352,4 +372,14 @@ export function WebRTCClient({
       </AnimatePresence>
     </div>
   );
+}
+
+export function stopWebRTCConnection() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g: any = globalThis as any;
+  const singleton = g.__webrtc_singleton as { pc: RTCPeerConnection | null; stream: MediaStream | null } | undefined;
+  if (!singleton) return;
+  try { if (singleton.pc) singleton.pc.close(); } catch {}
+  singleton.pc = null;
+  singleton.stream = null;
 }

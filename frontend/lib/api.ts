@@ -1,5 +1,5 @@
-import { revalidateTag } from "next/cache";
 import { User } from "./types";
+import { revalidateTag } from "next/cache";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8080";
 
@@ -13,6 +13,10 @@ export type ClassOut = {
   name: string;
   subject: string;
   status: string;
+};
+export type ClassSummary = ClassOut & {
+  roster_count: number;
+  sessions_count: number;
 };
 export type SessionOut = {
   id: number;
@@ -66,6 +70,18 @@ export async function apiListClasses(account_id: string) {
   return handle<ClassOut[]>(res);
 }
 
+export async function apiListClassesWithCounts(account_id: string) {
+  const res = await fetch(`${API_BASE}/api/classes/with-counts?account_id=${encodeURIComponent(account_id)}`, {
+    credentials: "include",
+    cache: "force-cache",
+    next: {
+      revalidate: 60,
+      tags: [`cls-with-counts-${account_id}`]
+    }
+  });
+  return handle<ClassSummary[]>(res);
+}
+
 export async function apiGetClass(class_id: number) {
   const res = await fetch(`${API_BASE}/api/classes/${class_id}`, {
     credentials: "include",
@@ -112,6 +128,17 @@ export async function apiGetUserByAccount(account_id: string) {
       tags: [`usr-${account_id}`]
     }
   });
-
   return handle<User>(res);
+}
+
+export async function apiListSessionsForClass(class_id: number) {
+  const res = await fetch(`${API_BASE}/api/classes/${class_id}/sessions`, {
+    credentials: "include",
+    cache: "force-cache",
+    next: {
+      revalidate: 60,
+      tags: [`cls-sessions-${class_id}`]
+    }
+  });
+  return handle<SessionOut[]>(res);
 }

@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 class StudentOut(BaseModel):
     id: int
@@ -28,3 +29,18 @@ class UserOut(BaseModel):
     name: str
     faculty: str
     academic_rank: str
+
+class ClassSummaryOut(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    subject: str
+    status: str
+    roster_count: int
+    sessions_count: int
+
+class SessionOut(BaseModel):
+    id: int
+    class_id: int
+    start_time: datetime
+    end_time: datetime

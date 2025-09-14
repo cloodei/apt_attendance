@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Camera, BarChart3, Play, Users, BookOpen, Clock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,16 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WebRTCClient } from "@/components/webrtc-client";
 import { AttendanceHistoryTab } from "@/components/att-history";
-import { apiGetClass, apiGetClassRoster, apiStartSession, type ClassOut, type StudentRef } from "@/lib/api";
+import { apiGetClass, apiGetClassRoster, apiStartSession, apiListSessionsForClass, type ClassOut, type StudentRef, type SessionOut } from "@/lib/api";
 import { toast } from "sonner";
 
-export default function ClassDetailPage({ params }: { params: { class_id: string } }) {
-  const classIdStr = params.class_id;
-  const classId = Number(classIdStr);
+export default function ClassDetailPage({ params }: { params: Promise<{ class_id: string }> }) {
+  const { class_id } = use(params);
+  const classId = Number(class_id);
 
   const [cls, setCls] = useState<ClassOut | null>(null);
   const [roster, setRoster] = useState<StudentRef[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<SessionOut[]>([]);
 
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
   const [hour, setHour] = useState("");
@@ -33,11 +34,17 @@ export default function ClassDetailPage({ params }: { params: { class_id: string
       setLoading(true);
 
       try {
-        const [c, r] = await Promise.all([
+        const [c, r, s] = await Promise.all([
           apiGetClass(classId),
           apiGetClassRoster(classId),
+          apiListSessionsForClass(classId),
         ]);
-        if (!cancelled) { setCls(c); setRoster(r); }
+
+        if (!cancelled) {
+          setCls(c);
+          setRoster(r);
+          setSessions(s);
+        }
       }
       catch (e: any) {
         if (!cancelled)
@@ -58,8 +65,14 @@ export default function ClassDetailPage({ params }: { params: { class_id: string
   const title = useMemo(() => cls?.name ?? "Class", [cls]);
 
   function isValidTime(hh: string, mm: string) {
-    const h = Number(hh); const m = Number(mm);
-    return Number.isInteger(h) && Number.isInteger(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59;
+    const h = Number(hh);
+    const m = Number(mm);
+    const time = new Date();
+
+    if ((!Number.isInteger(h) || !Number.isInteger(m)) && (h < time.getHours() && m <= time.getMinutes()))
+      return false;
+
+    return h >= 0 && h <= 23 && m >= 0 && m <= 59;
   }
 
   async function startAttendance() {
@@ -70,7 +83,7 @@ export default function ClassDetailPage({ params }: { params: { class_id: string
 
     try {
       const session = await apiStartSession(classId, Number(hour), Number(minute));
-      toast.success("Attendance session started");
+      toast.success("Created attendance session, connecting to take attendance soon...");
       setSessionId(session.id);
       setEndTimeISO(session.end_time);
       setIsTakingAttendance(true);
@@ -217,7 +230,7 @@ export default function ClassDetailPage({ params }: { params: { class_id: string
           )}
         </TabsContent>
 
-        <AttendanceHistoryTab sessions={[]} baseHref={`/dashboard/classes/${classId}/sessions`} />
+        <AttendanceHistoryTab sessions={sessions as any} baseHref={`/dashboard/classes/${classId}/sessions`} />
       </Tabs>
     </div>
   );

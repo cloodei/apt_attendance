@@ -15,8 +15,6 @@ export type WebRTCClientProps = {
   facesDetected?: number;
   /** Recognition confidence */
   confidence?: number;
-  /** Server URL for WebRTC connection */
-  serverUrl?: string;
   /** Optional roster to inform backend of valid student ids to match: array of {id, name} */
   students?: Array<{ id: number; name: string }>;
   /** Session id for this live run (for attendance writing) */
@@ -30,11 +28,10 @@ export function WebRTCClient({
   label, 
   isRecognizing = false, 
   facesDetected = 0, 
-  confidence = 0,
-  serverUrl,
-  students,
-  sessionId,
-  endTimeISO
+  confidence = 0, 
+  students, 
+  sessionId, 
+  endTimeISO 
 }: WebRTCClientProps) {
   const pcRef = React.useRef<RTCPeerConnection | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -65,8 +62,7 @@ export function WebRTCClient({
     await pc.setLocalDescription(offer);
 
     try {
-      const base = serverUrl || API_BASE;
-      const response = await fetch(`${base}/offer`, {
+      const response = await fetch(`${API_BASE}/offer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

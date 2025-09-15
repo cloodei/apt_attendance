@@ -429,6 +429,16 @@ async def list_session_attendance(session_id: int):
                 })
             return out
 
+async def publish_session_event(session_id: int, event: dict):
+    subs = session_event_subs.get(session_id)
+    if not subs:
+        return
+    for q in list(subs):
+        try:
+            await q.put(event)
+        except Exception:
+            pass
+
 
 @app.get("/api/sessions/{session_id}/events")
 async def session_events(session_id: int):
@@ -448,17 +458,6 @@ async def session_events(session_id: int):
                 subs.discard(queue)
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
-
-
-async def publish_session_event(session_id: int, event: dict):
-    subs = session_event_subs.get(session_id)
-    if not subs:
-        return
-    for q in list(subs):
-        try:
-            await q.put(event)
-        except Exception:
-            pass
 
 
 @app.post("/api/sessions/{session_id}/events/notify")

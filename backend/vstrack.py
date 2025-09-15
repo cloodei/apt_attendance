@@ -8,10 +8,9 @@ from aiortc import VideoStreamTrack
 from datetime import datetime, timezone, timedelta
 from detect import detect_faces
 
-# IP_WEBCAM_URL = "http://10.2.90.4:4747/video"
-# IP_WEBCAM_URL = "http://10.2.90.4:4747/video"
+# IP_WEBCAM_URL = "http://10.2.88.228:8080/video"
 # IP_WEBCAM_URL = "http://10.2.87.162:8080/video"
-IP_WEBCAM_URL = "http://10.2.88.228:8080/video"
+IP_WEBCAM_URL = "http://10.2.90.4:4747/video"
 
 class FaceDetectionTrack(VideoStreamTrack):
     """
@@ -38,7 +37,7 @@ class FaceDetectionTrack(VideoStreamTrack):
         self.api_base = os.getenv("API_BASE_URL") or "http://localhost:8080"
         self.connect()
 
-    async def _record_event(self, student_id: int, confidence: float | None = None):
+    def _record_event(self, student_id: int, confidence: float | None = None):
         if student_id not in self.students_list:
             return
 
@@ -70,7 +69,7 @@ class FaceDetectionTrack(VideoStreamTrack):
         else:
             in_time = rec.get("in_time")
             try:
-                if isinstance(in_time, datetime) and (now_local - in_time) < timedelta(seconds=60):
+                if isinstance(in_time, datetime) and (now_local - in_time) < timedelta(seconds=25):
                     return
             except Exception:
                 pass
@@ -81,10 +80,10 @@ class FaceDetectionTrack(VideoStreamTrack):
                 except Exception:
                     pass
             out_time = rec.get("out_time")
-            if out_time and (now_local - out_time) < timedelta(seconds=60):
+            if out_time and (now_local - out_time) < timedelta(seconds=15):
                 return
 
-            self.attendance[student_id]["out_time"] = now_local
+            rec["out_time"] = now_local
             try:
                 asyncio.create_task(
                     requests.post(
@@ -102,13 +101,12 @@ class FaceDetectionTrack(VideoStreamTrack):
             except Exception:
                 pass
 
-    async def _flush_bulk(self):
+    def _flush_bulk(self):
         if self._bulk_sent or not self.session_id or not self.attendance:
             return
         try:
             payload = []
             for sid, rec in self.attendance.items():
-                print(rec)
                 tin = rec.get("in_time")
                 tout = rec.get("out_time")
                 conf_avg = None
@@ -182,18 +180,16 @@ class FaceDetectionTrack(VideoStreamTrack):
             video_frame.time_base = time_base
             return video_frame
 
-        # loop = asyncio.get_event_loop()
-        # processed_frame, event = await loop.run_in_executor(None, detect_faces, frame, self.students_list)
-        processed_frame, event = detect_faces(frame=frame, students_list=self.students_list)
+        loop = asyncio.get_event_loop()
+        processed_frame, event = await loop.run_in_executor(None, detect_faces, frame, self.students_list)
 
         if event and self.session_id:
             conf = None
             try:
-                confidence = event.get("confidence")
-                conf = float(confidence) if isinstance(event, dict) and confidence is not None else None
+                conf = float(event.get("confidence")) if isinstance(event, dict) and event.get("confidence") is not None else None
             except Exception:
                 conf = None
-            asyncio.create_task(self._record_event(int(event["attendee_id"]), conf))
+            self._record_event(int(event["attendee_id"]), conf)
 
         video_frame = VideoFrame.from_ndarray(processed_frame, format="bgr24")
         video_frame = video_frame.reformat(format="yuv420p")
@@ -202,7 +198,7 @@ class FaceDetectionTrack(VideoStreamTrack):
 
         return video_frame
 
-    async def __del__(self):
+    def __del__(self):
         if self.cap and self.cap.isOpened():
             self.cap.release()
-        await self._flush_bulk()
+        self._flush_bulk()

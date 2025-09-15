@@ -91,17 +91,17 @@ def detect_faces(frame: cv2.typing.MatLike, students_list: dict[int, str]):
             face_embedding = resnet(face_tensor).detach().cpu().numpy()
             labels, similarity = predict_one_faiss_k1(model, face_embedding)
 
-            if similarity < 0.65:
+            if similarity < 0.65:  
                 name = "Unknown"
                 color = (0, 255, 255)
+                cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
             else:
-                name = students_list.get(labels, "Unknown")
-                if name == "Unknown":
-                    color = (0, 0, 255)
+                # name = students_list.get(labels, "Unknown")
                 prediction_queue.append(labels)
         else:
             name = "Bad"
             color = (0, 0, 255)
+            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
         if len(prediction_queue) == 5:
             attendee_id = Counter(prediction_queue).most_common(1)[0][0]
@@ -109,6 +109,6 @@ def detect_faces(frame: cv2.typing.MatLike, students_list: dict[int, str]):
             return frame, {"attendee_id": int(attendee_id), "confidence": similarity}
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        # cv2.putText(frame, name, (x1, y1-10), cv2.QT_FONT_NORMAL, 0.9, color, 2)
+        # cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
     return frame, None

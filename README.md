@@ -14,8 +14,8 @@ The monorepo is split into two main pieces:
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| [Bun](https://bun.sh/) | **1.2.22** | Executes the Next.js app and installs JS deps |
 | Node (optional) | ≥ 18 | Only required for some CLI tooling ‑ Bun usually suffices |
+| [Bun](https://bun.sh/) | **1.2.22** | Executes the Next.js app and installs JS deps |
 | [Python](https://www.python.org/) | **3.12.x** | Create a virtual-env with `uv` |
 | [uv](https://github.com/astral-sh/uv) | **0.8.17** | Fast Python package manager & venv creator |
 | [PostgreSQL](https://www.postgresql.org/) | **17** | Local install **or** remote Neon database |
@@ -49,7 +49,7 @@ API_BASE_URL="http://127.0.0.1:8080"
 ### 3.2 Frontend (`frontend/.env`)
 
 ```
-# Clerk
+# Clerk - sign up for an account and get secret keys
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 
@@ -77,7 +77,7 @@ cd backend
 
 # Create a venv in .venv and install deps declared in pyproject.toml
 uv venv .venv           # creates .venv (omit path to use global)
-uv pip install -e .     # installs project in editable mode + deps
+uv sync                 # installs project in editable mode + deps
 
 # Activate (PowerShell)
 .\.venv\Scripts\Activate.ps1  # cmd: .\.venv\Scripts\activate.bat | bash: source .venv/bin/activate
@@ -104,7 +104,7 @@ psql $Env:DATABASE_URL -f postgres.sql   # run inside backend/
 ### 4.3 Development server
 
 ```powershell
-uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload # or bun run dev
 ```
 
 * API docs available at `http://localhost:8080/docs` (Swagger) and `/redoc`.

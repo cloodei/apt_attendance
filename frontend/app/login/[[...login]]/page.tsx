@@ -1,24 +1,13 @@
-"use client";
-
-import { ThemeToggler } from "@/components/toggler";
-import { CustomSignIn } from "./custom-signin";
-import { useUser } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { useSetUser } from "@/stores/user_store";
-import { API_BASE } from "@/lib/utils";
+import { CustomSignIn } from "./custom-signin";
+import { ThemeToggler } from "@/components/toggler";
 
-export default function Page() {
-  const { user } = useUser();
-  const setUser = useSetUser();
+export default async function Page() {
+  const {isAuthenticated } = await auth();
 
-  if (user) {
-    fetch(`${API_BASE}/api/users/${user.username}`, { credentials: "include" })
-      .then(res => res.json())
-      .then(res => {
-        setUser(res);
-        redirect("/dashboard");
-      })
-      .catch(err => console.error(err));
+  if (isAuthenticated) {
+    return redirect("/dashboard")
   }
   else return (
     <div className="min-h-[calc(100%-64px)] relative">

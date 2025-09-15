@@ -10,7 +10,7 @@ export default function Page() {
   const setUser = useSetUser();
 
   if (user) {
-    fetch(`${API_BASE}/api/users/${user.username}`, { credentials: "include" })
+    fetch(`${API_BASE}/api/users/${user.username?.toUpperCase()}`)
       .then(res => res.json())
       .then(res => {
         setUser(res);
@@ -18,6 +18,5 @@ export default function Page() {
       })
       .catch(err => console.error(err));
   }
-
-  redirect("/login");
+  else redirect("/login");
 }

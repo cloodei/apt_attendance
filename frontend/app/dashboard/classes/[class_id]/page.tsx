@@ -45,6 +45,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [endTimeISO, setEndTimeISO] = useState<string | null>(null);
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
+  const [activeTab, setActiveTab] = useState<"live" | "history">("live");
 
   useEffect(() => {
     function beforeUnload(e: BeforeUnloadEvent) {
@@ -161,7 +162,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="live" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "live" | "history")} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 bg-card/50 backdrop-blur-sm text-neutral-800/30" style={{ outline: "1px solid #262626" }}>
           <TabsTrigger value="live" className="flex items-center gap-2 cursor-pointer">
             <Camera className="w-4 h-4" />
@@ -247,7 +248,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
           )}
         </TabsContent>
 
-        <AttendanceHistoryTab classId={classId} className={title} baseHref={`/dashboard/classes/${classId}/sessions`} />
+        <AttendanceHistoryTab active={activeTab === "history"} classId={classId} className={title} baseHref={`/dashboard/classes/${classId}/sessions`} />
       </Tabs>
 
       {isTakingAttendance && (
@@ -259,7 +260,10 @@ export default function ClassDetailPage({ params }: { params: Promise<{ class_id
           <Button
             size="sm"
             variant="destructive"
-            onClick={() => { stopWebRTCConnection(); setIsTakingAttendance(false); }}
+            onClick={() => {
+              stopWebRTCConnection();
+              setIsTakingAttendance(false);
+            }}
             className="gap-2"
           >
             <Square className="w-3.5 h-3.5" /> Stop

@@ -71,10 +71,14 @@ export function WebRTCClient({
 
     pc.ontrack = (event) => {
       const stream = event.streams && event.streams[0] ? event.streams[0] : null;
+
       if (stream) {
         singleton.stream = stream;
         if (videoRef.current) {
-          try { videoRef.current.srcObject = stream; } catch {}
+          try {
+            videoRef.current.srcObject = stream;
+          }
+          catch {}
         }
       }
     };
@@ -120,7 +124,10 @@ export function WebRTCClient({
   const stopConnection = () => {
     stopWebRTCConnection();
     if (videoRef.current) {
-      try { videoRef.current.srcObject = null; } catch {}
+      try {
+        videoRef.current.srcObject = null;
+      }
+      catch {}
     }
     setActive(false);
     setIsInitializing(false);

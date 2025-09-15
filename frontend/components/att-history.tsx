@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { CalendarDays, Clock, Users, ChevronRight, Percent, UserCheck } from "lucide-react";
 import { TypeWriter } from "./ui/typewriter";
 import { TabsContent } from "./ui/tabs";
@@ -14,14 +15,21 @@ interface AttendanceHistoryTabProps {
   classId: number;
   className: string;
   baseHref?: string;
+  active?: boolean;
 }
 
-export function AttendanceHistoryTab({ classId, className, baseHref = "/dashboard" }: AttendanceHistoryTabProps) {
-  const { data, isFetching, error } = useQuery({
+export function AttendanceHistoryTab({ classId, className, baseHref = "/dashboard", active = false }: AttendanceHistoryTabProps) {
+  const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["cls-sessions", classId],
     queryFn: () => apiListSessionsWithStats(classId),
     staleTime: 30_000,
+    refetchOnMount: "always",
   });
+
+  // Whenever the tab becomes active, force a refetch so data is always fresh on switch
+  useEffect(() => {
+    if (active) refetch();
+  }, [active, refetch]);
 
   const sessions: AttendanceSession[] = (data ?? []).map((s) => {
     const start = new Date(s.start_time);

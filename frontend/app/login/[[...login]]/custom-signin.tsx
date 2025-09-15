@@ -18,6 +18,7 @@ import {
   BarChart3,
   Shield
 } from "lucide-react";
+import { redirect } from "next/navigation";
 
 type FormData = {
   account_id: string;
@@ -41,28 +42,27 @@ export function CustomSignIn() {
       return;
 
     try {
+      let dbUser;
+
+      try {
+        const up = data.account_id.toUpperCase();
+        const res = await fetch(`${API_BASE}/api/users/${up}`);
+        if (res.ok) {
+          dbUser = await res.json();
+        }
+      }
+      catch (e) {
+        console.warn("Failed to fetch DB user post-signin", e);
+      }
+
       const result = await signIn.create({
         identifier: data.account_id,
         password: data.password,
       });
+      setUser(dbUser);
+      await setActive({ session: result.createdSessionId });
 
-      if (result.status === "complete") {
-        try {
-          const [res, _] = await Promise.all([
-            fetch(`${API_BASE}/api/users/${data.account_id}`, { credentials: "include" }),
-            setActive({ session: result.createdSessionId }),
-          ]);
-
-          if (res.ok) {
-            const dbUser = await res.json();
-            setUser(dbUser);
-          }
-        }
-        catch (e) {
-          console.warn("Failed to fetch DB user post-signin", e);
-        }
-      }
-      else {
+      if (result.status !== "complete") {
         setError("root", {
           message: "Sign in failed. Please try again.",
           type: "manual",

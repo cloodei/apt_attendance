@@ -41,13 +41,16 @@ apt_attendance/
 
 ### 3.1 Backend (`backend/.env`)
 
+Create a .env at the /backend directory if not already exists, and paste in your credentials
 ```
 DATABASE_URL="postgres://<user>:<password>@<host>:<port>/<db>?sslmode=require"
-API_BASE_URL="http://127.0.0.1:8080"
+API_BASE_URL="http://127.0.0.1:8080" # or your computer's IP Address
+IP_WEBCAM_URL="http://<your_webcam's_IP_Address>/video"
 ```
 
 ### 3.2 Frontend (`frontend/.env`)
 
+Create a .env at the /frontend directory if not already exists, and paste in your credentials
 ```
 # Clerk - sign up for an account and get secret keys
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
@@ -59,7 +62,7 @@ CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/login
 NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
 
-# API endpoint exposed by FastAPI
+# API endpoint exposed by FastAPI, should be in-line with API_BASE_URL of the backend/.env
 NEXT_PUBLIC_API_BASE="http://127.0.0.1:8080"
 ```
 
@@ -104,7 +107,7 @@ psql $Env:DATABASE_URL -f postgres.sql   # run inside backend/
 ### 4.3 Development server
 
 ```powershell
-uvicorn main:app --host 0.0.0.0 --port 8080 --reload # or bun run dev
+bun run dev  # or uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 * API docs available at `http://localhost:8080/docs` (Swagger) and `/redoc`.

@@ -8,9 +8,7 @@ from aiortc import VideoStreamTrack
 from datetime import datetime, timezone, timedelta
 from detect import detect_faces
 
-# IP_WEBCAM_URL = "http://10.2.88.228:8080/video"
-# IP_WEBCAM_URL = "http://10.2.87.162:8080/video"
-IP_WEBCAM_URL = "http://10.2.90.4:4747/video"
+IP_WEBCAM_URL = os.getenv("IP_WEBCAM_URL")
 
 class FaceDetectionTrack(VideoStreamTrack):
     """

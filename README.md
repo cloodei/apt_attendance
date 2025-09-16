@@ -19,7 +19,7 @@ The monorepo is split into two main pieces:
 | [Python](https://www.python.org/) | **3.12.x** | Create a virtual-env with `uv` |
 | [uv](https://github.com/astral-sh/uv) | **0.8.17** | Fast Python package manager & venv creator |
 | [PostgreSQL](https://www.postgresql.org/) | **17** | Local install **or** remote Neon database |
-| Git | latest | clone the repo |
+| [Git](https://git-scm.com/) | latest | Clone the repo |
 
 > Windows users should install Python from the official installer **with** the "Add to PATH" option.
 
@@ -33,6 +33,19 @@ apt_attendance/
 ├─ frontend/       # Next.js 15 app (Bun)
 ├─ model/          # ML notebooks + face-recognition models (optional)
 └─ README.md       # you are here 😉
+```
+
+### 2.1 Repository setup
+
+```powershell
+# Clone the repository
+git clone https://github.com/cloodei/apt_attendance.git
+
+# Navigate to the repository directory
+cd apt_attendance
+
+# Install dependencies
+bun down
 ```
 
 ---
@@ -156,7 +169,7 @@ Open two terminals:
 1. **Backend** – activate venv & `uvicorn --reload` (port 8080).
 2. **Frontend** – `bun run dev` (port 3000).
 
-If you prefer a single command you can install `concurrently` globally with Bun and add a top-level script:
+If you prefer a single command you can open a terminal in project root and run `bun run dev`.
 
 ```jsonc
 "dev": "concurrently \"bun --cwd frontend dev\" \"uvicorn --app-dir backend backend.main:app --reload\""

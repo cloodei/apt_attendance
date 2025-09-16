@@ -28,7 +28,6 @@ preprocess = transforms.Compose([
 ])
 
 prediction_queue = deque(maxlen=5)
-final_list = []
 
 def predict_one_faiss_k1(index, x):
     x = x.reshape(1, -1).astype('float32')
@@ -39,7 +38,7 @@ def predict_one_faiss_k1(index, x):
     similarity = 1 / (1 + dist)
     return label, similarity
 
-def detect_faces(frame: cv2.typing.MatLike, students_list: dict[int, str]):
+def detect_faces(frame: cv2.typing.MatLike):
     """
     Detects faces in a given frame, draws bounding boxes, and returns the frame.
     This is a blocking, CPU-bound function.
@@ -91,17 +90,14 @@ def detect_faces(frame: cv2.typing.MatLike, students_list: dict[int, str]):
             face_embedding = resnet(face_tensor).detach().cpu().numpy()
             labels, similarity = predict_one_faiss_k1(model, face_embedding)
 
-            if similarity < 0.65:  
-                name = "Unknown"
+            if similarity < 0.65:
                 color = (0, 255, 255)
-                cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                cv2.putText(frame, "Unknown", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
             else:
-                # name = students_list.get(labels, "Unknown")
                 prediction_queue.append(labels)
         else:
-            name = "Bad"
             color = (0, 0, 255)
-            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            cv2.putText(frame, "Bad", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
         if len(prediction_queue) == 5:
             attendee_id = Counter(prediction_queue).most_common(1)[0][0]
@@ -109,6 +105,5 @@ def detect_faces(frame: cv2.typing.MatLike, students_list: dict[int, str]):
             return frame, {"attendee_id": int(attendee_id), "confidence": similarity}
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-        # cv2.putText(frame, name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
     return frame, None

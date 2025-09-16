@@ -1,16 +1,15 @@
 {
   "name": "apt_attendance",
   "scripts": {
-    "start": "concurrently \"bun run frontend\" \"bun run backend\"",
-    "start:webrtc": "concurrently \"bun run frontend\" \"bun run backend:webrtc\"",
+    "dev": "concurrently \"bun run frontend\" \"bun run backend\"",
+    "start": "concurrently \"bun run start:frontend\" \"bun run start:backend\"",
     "down": "bun install && bun run install:frontend && bun run install:backend",
     "install:frontend": "cd frontend && bun install",
     "install:backend": "cd backend && uv sync",
     "frontend": "cd frontend && bun run dev",
     "backend": "cd backend && bun run dev",
-    "backend:webrtc": "cd backend && python run_server.py",
-    "setup:all": "bun run install:frontend && bun run install:backend",
-    "dev:webrtc": "concurrently \"bun run frontend\" \"bun run backend:webrtc\""
+    "start:frontend": "cd frontend && bun run start",
+    "start:backend": "cd backend && bun run start"
   },
   "dependencies": {
     "concurrently": "^9.2.1"

@@ -1,28 +1,29 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import logging
 import os
 import asyncio
+from datetime import datetime, time, timezone
 import json
 import vstrack
-import models
-import rtmps
-from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
-from datetime import datetime, time, timezone
 from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.background import BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from starlette.responses import StreamingResponse
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
+import models
 from contextlib import asynccontextmanager
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(instance: FastAPI):
     await pool.open()
-    rtmp_server_task = asyncio.create_task(rtmps.start_rtmp_server())
     yield
-    rtmp_server_task.cancel()
     await pool.close()
 
 app = FastAPI(lifespan=lifespan)
@@ -40,7 +41,7 @@ session_event_subs: dict[int, set[asyncio.Queue]] = {}
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL is None:
-    print("DATABASE_URL is not set. API endpoints requiring DB will raise at runtime.")
+    logging.warning("DATABASE_URL is not set. API endpoints requiring DB will raise at runtime.")
     raise RuntimeError("DATABASE_URL is not set")
 else:
     pool = AsyncConnectionPool(conninfo=DATABASE_URL, max_size=10, kwargs={"autocommit": False}, open=False, num_workers=5)
@@ -51,18 +52,15 @@ LOCAL_TZ = datetime.now().astimezone().tzinfo or timezone.utc
 async def offer(request: Request):
     params = await request.json()
     raw_students = params.get("students_list", {})
-
     try:
         students_list: dict[int, str] = {int(k): str(v) for k, v in raw_students.items()}
     except Exception:
         students_list = {}
-
     session_id = params.get("session_id")
     try:
         session_id = int(session_id) if session_id is not None else None
     except Exception:
         session_id = None
-
     end_time_iso = params.get("end_time")
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
@@ -485,6 +483,6 @@ async def on_shutdown():
     if pool is not None:
         await pool.close()
 
-# if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run(app, host="0.0.0.0", port=8080)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

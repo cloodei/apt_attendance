@@ -1,8 +1,8 @@
 {
   "name": "apt_attendance",
   "scripts": {
-    "start": "uvicorn main:app --host 0.0.0.0 --port 8080 --workers 4",
-    "dev": "uvicorn main:app --reload --host 0.0.0.0 --port 8080",
+    "start": "uv run main.py",
+    "dev": "uv run main.py",
     "install": "uv sync"
   }
 }

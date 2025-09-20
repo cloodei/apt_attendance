@@ -1,20 +1,24 @@
 import requests_async as requests
 import asyncio
 import os
+import cv2
 import numpy as np
 from av import VideoFrame
 from aiortc import VideoStreamTrack
 from datetime import datetime, timezone, timedelta
-
 from detect import detect_faces
-from shared import frame_queue
+
+IP_WEBCAM_URL = os.getenv("IP_WEBCAM_URL")
 
 class FaceDetectionTrack(VideoStreamTrack):
     """
-    VideoStreamTrack that performs face detection on frames from a shared queue.
+    VideoStreamTrack that performs face detection every `process_interval` frames.
+    Intermediate frames are relayed unmodified to keep FPS high.
     """
     def __init__(self, students_list: dict[int, str], session_id: int | None = None, end_time_iso: str | None = None):
         super().__init__()
+        self.cap = None
+        self.reconnect_attempts = 5
         self.students_list = students_list
         self.session_id = session_id
         self.attendance: dict[int, dict[str, object]] = {}
@@ -29,8 +33,9 @@ class FaceDetectionTrack(VideoStreamTrack):
             except Exception:
                 self.end_time = None
         self.api_base = os.getenv("API_BASE_URL") or "http://localhost:8080"
+        self.connect()
 
-    async def _record_event(self, student_id: int, confidence: float | None = None):
+    def _record_event(self, student_id: int, confidence: float | None = None):
         if student_id not in self.students_list:
             return
 
@@ -76,7 +81,7 @@ class FaceDetectionTrack(VideoStreamTrack):
             if out_time and (now_local - out_time) < timedelta(seconds=15):
                 return
 
-            self.students_list[student_id]["out_time"] = now_local
+            rec["out_time"] = now_local
             try:
                 asyncio.create_task(
                     requests.post(
@@ -94,7 +99,7 @@ class FaceDetectionTrack(VideoStreamTrack):
             except Exception:
                 pass
 
-    async def _flush_bulk(self):
+    def _flush_bulk(self):
         if self._bulk_sent or not self.session_id or not self.attendance:
             return
         try:
@@ -126,12 +131,25 @@ class FaceDetectionTrack(VideoStreamTrack):
         except Exception:
             pass
 
+    def connect(self):
+        print("Attempting to connect to IP Webcam stream...")
+        self.cap = cv2.VideoCapture(IP_WEBCAM_URL)
+
+        if not self.cap.isOpened():
+            print(f"Could not open video stream from IP Webcam: {IP_WEBCAM_URL}")
+            self.cap = None
+        else:
+            print("Successfully connected to IP Webcam stream.")
+
     async def recv(self):
         pts, time_base = await self.next_timestamp()
 
         if self.end_time is not None and datetime.now(timezone.utc) >= self.end_time:
-            await self._flush_bulk()
-            # Return a black frame to signal the end of the stream
+            if self.cap and self.cap.isOpened():
+                self.cap.release()
+                self.cap = None
+
+            self._flush_bulk()
             black_frame_img = np.zeros((480, 640, 3), dtype=np.uint8)
             video_frame = VideoFrame.from_ndarray(black_frame_img, format="rgb24")
             video_frame.pts = pts
@@ -139,21 +157,29 @@ class FaceDetectionTrack(VideoStreamTrack):
             await asyncio.sleep(0.2)
             return video_frame
 
-        try:
-            frame = await asyncio.wait_for(frame_queue.get(), timeout=1.0)
-            frame_queue.task_done()
-        except asyncio.TimeoutError:
-            # If no frame is available, return a black frame
+        if self.cap is None:
+            self.connect()
+            black_frame_img = np.zeros((480, 640, 3), dtype=np.uint8)
+            video_frame = VideoFrame.from_ndarray(black_frame_img, format="rgb24")
+            video_frame.pts = pts
+            video_frame.time_base = time_base
+            await asyncio.sleep(1)
+            return video_frame
+
+        ret, frame = self.cap.read()
+
+        if not ret:
+            print("Could not read frame, potential connection loss.")
+            self.cap.release()
+            self.cap = None
             black_frame_img = np.zeros((480, 640, 3), dtype=np.uint8)
             video_frame = VideoFrame.from_ndarray(black_frame_img, format="rgb24")
             video_frame.pts = pts
             video_frame.time_base = time_base
             return video_frame
 
-        # loop = asyncio.get_event_loop()
-        # processed_frame, event = await loop.run_in_executor(None, detect_faces, frame, self.students_list)
-
-        processed_frame, event = detect_faces(frame=frame)
+        loop = asyncio.get_event_loop()
+        processed_frame, event = await loop.run_in_executor(None, detect_faces, frame)
 
         if event and self.session_id:
             conf = None
@@ -161,7 +187,7 @@ class FaceDetectionTrack(VideoStreamTrack):
                 conf = float(event.get("confidence")) if isinstance(event, dict) and event.get("confidence") is not None else None
             except Exception:
                 conf = None
-            asyncio.create_task(self._record_event(int(event["attendee_id"]), conf))
+            self._record_event(int(event["attendee_id"]), conf)
 
         video_frame = VideoFrame.from_ndarray(processed_frame, format="bgr24")
         video_frame = video_frame.reformat(format="yuv420p")
@@ -170,5 +196,7 @@ class FaceDetectionTrack(VideoStreamTrack):
 
         return video_frame
 
-    async def __del__(self):
-        await self._flush_bulk()
+    def __del__(self):
+        if self.cap and self.cap.isOpened():
+            self.cap.release()
+        self._flush_bulk()
